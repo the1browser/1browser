@@ -1,2 +1,5 @@
 # 1browser
-1browser API
+
+## Documentation
+
+- [API](docs/api/index.md)
