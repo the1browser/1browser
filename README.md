@@ -7,16 +7,21 @@ Where is token? API token is <a href="https://app.1browser.com/api" target="_bla
 ## Documentation
 
 - [API](docs/api/index.md)
+- [Browser automation over CDP](docs/cdp-api.md)
 
 ## Browser automation over CDP
 
 1browser exposes experimental Chrome DevTools Protocol methods in the
 `Browser` domain for local browser automation. These methods are useful when a
 Node.js script needs to create persistent browser profiles, open a window for a
-profile, or run the 1browser auth flow from the browser process.
+profile, update fingerprint or proxy settings, or run the 1browser auth flow
+from the browser process.
 
-The browser must be launched with the `DevToolsBrowserProfileMethods` feature
-enabled. The API can be called from Puppeteer through a raw CDP session.
+See the full CDP method reference and usage examples in
+[Browser automation over CDP](docs/cdp-api.md).
+
+The browser must be launched with the matching feature flags. The API can be
+called from Puppeteer through a raw CDP session.
 
 ```bash
 npm install puppeteer-core
@@ -33,7 +38,7 @@ async function main() {
     args: [
       '--remote-debugging-port=0',
       '--user-data-dir=/tmp/onebrowser-cdp-profile',
-      '--enable-features=DevToolsBrowserProfileMethods',
+      '--enable-features=DevToolsBrowserProfileMethods,DevToolsBrowserFingerprintMethods,DevToolsBrowserProxyMethods',
       '--no-first-run',
     ],
   });
@@ -84,6 +89,16 @@ All methods are in the `Browser` CDP domain.
 | `Browser.getProfiles` | none | `{ profiles: ProfileInfo[] }` |
 | `Browser.createProfile` | `{ name?: string, hidden?: boolean }` | `{ profile: ProfileInfo }` |
 | `Browser.createWindowForProfile` | `{ profileId: string }` | `{ windowId: number, targetId: string }` |
+| `Browser.deleteProfileById` | `{ profileId: string }` | `{ success: boolean }` |
+| `Browser.getFingerprintSetting` | `{ profileId?: string, name: string }` | `{ setting: object }` |
+| `Browser.getFingerprintSettings` | `{ profileId?: string }` | `{ settings: object }` |
+| `Browser.setFingerprintSetting` | `{ profileId?: string, name: string, value: any }` | `{ setting: object }` |
+| `Browser.generateFingerprint` | `{ profileId?: string }` | `{ started: boolean }` |
+| `Browser.getProxySettings` | `{ profileId?: string }` | `{ settings: object }` |
+| `Browser.setProxySettings` | `{ profileId?: string, type: string, settings: object }` | `{ settings: object }` |
+| `Browser.setProxyType` | `{ profileId?: string, type: string }` | `{ settings: object }` |
+| `Browser.checkProxyConnection` | `{ profileId?: string }` | `{ started: boolean }` |
+| `Browser.requestNewProxy` | `{ profileId?: string }` | `{ started: boolean }` |
 | `Browser.login` | none | `{ windowId: number, targetId: string }` |
 | `Browser.signup` | `{ email: string, password: string }` | `AuthResponse` |
 | `Browser.signin` | `{ email: string, password: string }` | `AuthResponse` |
