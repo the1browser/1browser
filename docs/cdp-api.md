@@ -16,6 +16,22 @@ feature flags. Enable all local automation methods with:
 npm install puppeteer-core
 ```
 
+Set `ONE_BROWSER_PATH` to the installed 1browser executable path before running
+the script:
+
+```bash
+# macOS
+export ONE_BROWSER_PATH="/Applications/1browser.app/Contents/MacOS/1browser"
+
+# Linux
+export ONE_BROWSER_PATH="/path/to/1browser"
+```
+
+```powershell
+# Windows PowerShell
+$env:ONE_BROWSER_PATH = "C:\Path\To\1browser.exe"
+```
+
 ```js
 const puppeteer = require('puppeteer-core');
 
