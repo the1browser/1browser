@@ -28,19 +28,26 @@ npm install puppeteer-core
 ```
 
 Set `ONE_BROWSER_PATH` to the installed 1browser executable path before running
-the script:
+the script. If the script signs in with `Browser.signin`, also set `ONE_EMAIL`
+and `ONE_PASSWORD`:
 
 ```bash
 # macOS
 export ONE_BROWSER_PATH="/Applications/1browser.app/Contents/MacOS/1browser"
+export ONE_EMAIL="<email>"
+export ONE_PASSWORD="<password>"
 
 # Linux
 export ONE_BROWSER_PATH="/path/to/1browser"
+export ONE_EMAIL="<email>"
+export ONE_PASSWORD="<password>"
 ```
 
 ```powershell
 # Windows PowerShell
 $env:ONE_BROWSER_PATH = "C:\Path\To\1browser.exe"
+$env:ONE_EMAIL = "<email>"
+$env:ONE_PASSWORD = "<password>"
 ```
 
 ```js
@@ -62,30 +69,50 @@ async function main() {
   const page = await browser.newPage();
   const cdp = await page.target().createCDPSession();
 
-  const { profiles } = await cdp.send('Browser.getProfiles');
-  console.log(profiles);
-
-  const { profile } = await cdp.send('Browser.createProfile', {
-    name: 'Automation Profile',
-  });
-
-  const windowInfo = await cdp.send('Browser.createWindowForProfile', {
-    profileId: profile.id,
-  });
-  console.log(windowInfo.windowId, windowInfo.targetId);
-
   // Check whether the persisted auth session is still valid.
   const authState = await cdp.send('Browser.getAuthState', {
     validateOnline: true,
   });
 
   if (!authState.signedIn) {
+    const email = process.env.ONE_EMAIL;
+    const password = process.env.ONE_PASSWORD;
+
+    if (!email || !password) {
+      throw new Error('Set ONE_EMAIL and ONE_PASSWORD before running this script.');
+    }
+
     // Browser-process auth flow for an existing account.
     const signin = await cdp.send('Browser.signin', {
-      email: 'email@example.com',
-      password: 'password',
+      email,
+      password,
     });
     console.log(signin);
+  }
+
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  await delay(5000);
+
+  const { profiles } = await cdp.send('Browser.getProfiles');
+  console.log(profiles);
+
+  const { count } = await cdp.send('Browser.getAvailableProfileCreationCount');
+  console.log(`Profiles left to create: ${count}`);
+
+  if (count <= 0) {
+    throw new Error('No profiles left to create for the current account.');
+  }
+
+  for (let index = 0; index < count; index += 1) {
+    const { profile } = await cdp.send('Browser.createProfile', {
+      name: `Automation Profile ${index + 1}`,
+    });
+    console.log(profile);
+
+    const windowInfo = await cdp.send('Browser.createWindowForProfile', {
+      profileId: profile.id,
+    });
+    console.log(windowInfo.windowId, windowInfo.targetId);
   }
 
   await cdp.send('Browser.verify');
@@ -107,6 +134,7 @@ All methods are in the `Browser` CDP domain.
 | Method | Parameters | Returns |
 | --- | --- | --- |
 | `Browser.getProfiles` | none | `{ profiles: ProfileInfo[] }` |
+| `Browser.getAvailableProfileCreationCount` | none | `{ count: number }` |
 | `Browser.createProfile` | `{ name?: string, hidden?: boolean }` | `{ profile: ProfileInfo }` |
 | `Browser.createWindowForProfile` | `{ profileId: string }` | `{ windowId: number, targetId: string }` |
 | `Browser.deleteProfileById` | `{ profileId: string }` | `{ success: boolean }` |
@@ -134,6 +162,8 @@ browser validates the persisted refresh token before returning `signed_in`.
 
 `Browser.createProfile` creates a persistent Chrome profile under the current
 `--user-data-dir`. `hidden: true` is not currently supported.
+`Browser.getAvailableProfileCreationCount` returns how many more persistent
+profiles can be created according to the current account profile limit.
 
 ```ts
 type ProfileInfo = {

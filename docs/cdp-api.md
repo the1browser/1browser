@@ -17,19 +17,26 @@ npm install puppeteer-core
 ```
 
 Set `ONE_BROWSER_PATH` to the installed 1browser executable path before running
-the script:
+the script. If the script signs in with `Browser.signin`, also set `ONE_EMAIL`
+and `ONE_PASSWORD`:
 
 ```bash
 # macOS
 export ONE_BROWSER_PATH="/Applications/1browser.app/Contents/MacOS/1browser"
+export ONE_EMAIL="<email>"
+export ONE_PASSWORD="<password>"
 
 # Linux
 export ONE_BROWSER_PATH="/path/to/1browser"
+export ONE_EMAIL="<email>"
+export ONE_PASSWORD="<password>"
 ```
 
 ```powershell
 # Windows PowerShell
 $env:ONE_BROWSER_PATH = "C:\Path\To\1browser.exe"
+$env:ONE_EMAIL = "<email>"
+$env:ONE_PASSWORD = "<password>"
 ```
 
 ```js
@@ -51,18 +58,54 @@ async function main() {
   const page = await browser.newPage();
   const cdp = await page.target().createCDPSession();
 
-  const {profiles} = await cdp.send('Browser.getProfiles');
+  // Check whether the persisted auth session is still valid.
+  const authState = await cdp.send('Browser.getAuthState', {
+    validateOnline: true,
+  });
+
+  if (!authState.signedIn) {
+    const email = process.env.ONE_EMAIL;
+    const password = process.env.ONE_PASSWORD;
+
+    if (!email || !password) {
+      throw new Error('Set ONE_EMAIL and ONE_PASSWORD before running this script.');
+    }
+
+    // Browser-process auth flow for an existing account.
+    const signin = await cdp.send('Browser.signin', {
+      email,
+      password,
+    });
+    console.log(signin);
+  }
+
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  await delay(5000);
+
+  const { profiles } = await cdp.send('Browser.getProfiles');
   console.log(profiles);
 
-  const {profile} = await cdp.send('Browser.createProfile', {
-    name: 'Automation Profile',
-  });
-  console.log(profile.id);
+  const { count } = await cdp.send('Browser.getAvailableProfileCreationCount');
+  console.log(`Profiles left to create: ${count}`);
 
-  const windowInfo = await cdp.send('Browser.createWindowForProfile', {
-    profileId: profile.id,
-  });
-  console.log(windowInfo.windowId, windowInfo.targetId);
+  if (count <= 0) {
+    throw new Error('No profiles left to create for the current account.');
+  }
+
+  for (let index = 0; index < count; index += 1) {
+    const { profile } = await cdp.send('Browser.createProfile', {
+      name: `Automation Profile ${index + 1}`,
+    });
+    console.log(profile);
+
+    const windowInfo = await cdp.send('Browser.createWindowForProfile', {
+      profileId: profile.id,
+    });
+    console.log(windowInfo.windowId, windowInfo.targetId);
+  }
+
+  await cdp.send('Browser.verify');
+  await cdp.send('Browser.logout');
 
   await browser.close();
 }
@@ -80,6 +123,7 @@ All methods are in the `Browser` CDP domain.
 | Method | Parameters | Returns |
 | --- | --- | --- |
 | `Browser.getProfiles` | none | `{ profiles: ProfileInfo[] }` |
+| `Browser.getAvailableProfileCreationCount` | none | `{ count: number }` |
 | `Browser.createProfile` | `{ name?: string, hidden?: boolean }` | `{ profile: ProfileInfo }` |
 | `Browser.createWindowForProfile` | `{ profileId: string }` | `{ windowId: number, targetId: string }` |
 | `Browser.deleteProfileById` | `{ profileId: string }` | `{ success: boolean }` |
@@ -144,6 +188,15 @@ List persistent profiles:
 ```js
 const {profiles} = await cdp.send('Browser.getProfiles');
 ```
+
+Get how many more persistent profiles can be created:
+
+```js
+const {count} = await cdp.send('Browser.getAvailableProfileCreationCount');
+```
+
+The value is based on the current account profile limit and the number of
+active, non-omitted profiles.
 
 Create a persistent profile under the current `--user-data-dir`:
 
@@ -298,8 +351,8 @@ Sign up and start the browser signin flow:
 
 ```js
 const signup = await cdp.send('Browser.signup', {
-  email: 'email@example.com',
-  password: 'password',
+  email: process.env.ONE_EMAIL,
+  password: process.env.ONE_PASSWORD,
 });
 
 if (!signup.success) {
@@ -311,8 +364,8 @@ Sign in an existing account:
 
 ```js
 const signin = await cdp.send('Browser.signin', {
-  email: 'email@example.com',
-  password: 'password',
+  email: process.env.ONE_EMAIL,
+  password: process.env.ONE_PASSWORD,
 });
 
 if (!signin.success) {
@@ -345,75 +398,79 @@ Any CDP WebSocket client can call the same methods directly:
 ```
 
 ```json
-{"id":2,"method":"Browser.createProfile","params":{"name":"Test User"}}
+{"id":2,"method":"Browser.getAvailableProfileCreationCount"}
 ```
 
 ```json
-{"id":3,"method":"Browser.createWindowForProfile","params":{"profileId":"Profile 1"}}
+{"id":3,"method":"Browser.createProfile","params":{"name":"Test User"}}
 ```
 
 ```json
-{"id":4,"method":"Browser.deleteProfileById","params":{"profileId":"Profile 1"}}
+{"id":4,"method":"Browser.createWindowForProfile","params":{"profileId":"Profile 1"}}
 ```
 
 ```json
-{"id":5,"method":"Browser.getFingerprintSetting","params":{"profileId":"Profile 1","name":"screen_resolution"}}
+{"id":5,"method":"Browser.deleteProfileById","params":{"profileId":"Profile 1"}}
 ```
 
 ```json
-{"id":6,"method":"Browser.getFingerprintSettings","params":{"profileId":"Profile 1"}}
+{"id":6,"method":"Browser.getFingerprintSetting","params":{"profileId":"Profile 1","name":"screen_resolution"}}
 ```
 
 ```json
-{"id":7,"method":"Browser.setFingerprintSetting","params":{"profileId":"Profile 1","name":"screen_resolution","value":"800x600"}}
+{"id":7,"method":"Browser.getFingerprintSettings","params":{"profileId":"Profile 1"}}
 ```
 
 ```json
-{"id":8,"method":"Browser.generateFingerprint","params":{"profileId":"Profile 1"}}
+{"id":8,"method":"Browser.setFingerprintSetting","params":{"profileId":"Profile 1","name":"screen_resolution","value":"800x600"}}
 ```
 
 ```json
-{"id":9,"method":"Browser.getProxySettings","params":{"profileId":"Profile 1"}}
+{"id":9,"method":"Browser.generateFingerprint","params":{"profileId":"Profile 1"}}
 ```
 
 ```json
-{"id":10,"method":"Browser.setProxySettings","params":{"profileId":"Profile 1","type":"User proxy","settings":{"user":"http://user:pass@host:8080","free":"","tor":"","datacenter":"","mobile":"","resident":""}}}
+{"id":10,"method":"Browser.getProxySettings","params":{"profileId":"Profile 1"}}
 ```
 
 ```json
-{"id":11,"method":"Browser.setProxyType","params":{"profileId":"Profile 1","type":"No proxy"}}
+{"id":11,"method":"Browser.setProxySettings","params":{"profileId":"Profile 1","type":"User proxy","settings":{"user":"http://user:pass@host:8080","free":"","tor":"","datacenter":"","mobile":"","resident":""}}}
 ```
 
 ```json
-{"id":12,"method":"Browser.checkProxyConnection","params":{"profileId":"Profile 1"}}
+{"id":12,"method":"Browser.setProxyType","params":{"profileId":"Profile 1","type":"No proxy"}}
 ```
 
 ```json
-{"id":13,"method":"Browser.requestNewProxy","params":{"profileId":"Profile 1"}}
+{"id":13,"method":"Browser.checkProxyConnection","params":{"profileId":"Profile 1"}}
 ```
 
 ```json
-{"id":14,"method":"Browser.login"}
+{"id":14,"method":"Browser.requestNewProxy","params":{"profileId":"Profile 1"}}
 ```
 
 ```json
-{"id":15,"method":"Browser.getAuthState","params":{"validateOnline":true}}
+{"id":15,"method":"Browser.login"}
 ```
 
 ```json
-{"id":16,"method":"Browser.signup","params":{"email":"email@example.com","password":"password"}}
+{"id":16,"method":"Browser.getAuthState","params":{"validateOnline":true}}
 ```
 
 ```json
-{"id":17,"method":"Browser.signin","params":{"email":"email@example.com","password":"password"}}
+{"id":17,"method":"Browser.signup","params":{"email":"<email>","password":"<password>"}}
 ```
 
 ```json
-{"id":18,"method":"Browser.verify"}
+{"id":18,"method":"Browser.signin","params":{"email":"<email>","password":"<password>"}}
 ```
 
 ```json
-{"id":19,"method":"Browser.logout"}
+{"id":19,"method":"Browser.verify"}
+```
+
+```json
+{"id":20,"method":"Browser.logout"}
 ```
 
 ## Troubleshooting
