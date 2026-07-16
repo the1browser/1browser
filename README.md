@@ -58,15 +58,19 @@ async function main() {
   });
   console.log(windowInfo.windowId, windowInfo.targetId);
 
-  // Opens the web login page. This does not accept email/password.
-  await cdp.send('Browser.login');
-
-  // Browser-process auth flow for an existing account.
-  const signin = await cdp.send('Browser.signin', {
-    email: 'email@example.com',
-    password: 'password',
+  // Check whether the persisted auth session is still valid.
+  const authState = await cdp.send('Browser.getAuthState', {
+    validateOnline: true,
   });
-  console.log(signin);
+
+  if (!authState.signedIn) {
+    // Browser-process auth flow for an existing account.
+    const signin = await cdp.send('Browser.signin', {
+      email: 'email@example.com',
+      password: 'password',
+    });
+    console.log(signin);
+  }
 
   await cdp.send('Browser.verify');
   await cdp.send('Browser.logout');
@@ -100,6 +104,7 @@ All methods are in the `Browser` CDP domain.
 | `Browser.checkProxyConnection` | `{ profileId?: string }` | `{ started: boolean }` |
 | `Browser.requestNewProxy` | `{ profileId?: string }` | `{ started: boolean }` |
 | `Browser.login` | none | `{ windowId: number, targetId: string }` |
+| `Browser.getAuthState` | `{ validateOnline?: boolean }` | `AuthState` |
 | `Browser.signup` | `{ email: string, password: string }` | `AuthResponse` |
 | `Browser.signin` | `{ email: string, password: string }` | `AuthResponse` |
 | `Browser.verify` | none | `AuthResponse` |
@@ -107,6 +112,9 @@ All methods are in the `Browser` CDP domain.
 
 `Browser.login` opens the 1browser web login page and returns the opened tab
 target. Use `Browser.signin` for the email/password backend auth flow.
+`Browser.getAuthState` checks the current browser auth state without reading
+URLs, cookies, localStorage, or page DOM. With `validateOnline: true`, the
+browser validates the persisted refresh token before returning `signed_in`.
 
 `Browser.createProfile` creates a persistent Chrome profile under the current
 `--user-data-dir`. `hidden: true` is not currently supported.
@@ -126,6 +134,14 @@ type AuthResponse = {
   success: boolean;
   responseCode: number;
   body?: string;
+};
+
+type AuthState = {
+  signedIn: boolean;
+  state: 'signed_in' | 'signed_out' | 'expired' | 'unknown';
+  email?: string;
+  userId?: string;
+  reason?: string;
 };
 ```
 
