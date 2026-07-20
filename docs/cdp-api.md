@@ -293,6 +293,141 @@ const {settings} = await cdp.send('Browser.setProxySettings', {
 });
 ```
 
+`type` must be one of:
+
+- `No proxy`
+- `User proxy`
+- `Free proxy`
+- `Free Tor proxy`
+- `Datacenter proxy`
+- `Mobile proxy`
+- `Resident proxy`
+
+`setProxySettings` always expects the full proxy settings object. Fill the
+field for the proxy type you want to use, and keep the other fields as their
+current values from `Browser.getProxySettings` or as empty strings. Country
+fields use country codes from the corresponding `countriesSelect` list in
+`settings.availableProxies`.
+
+Disable proxy:
+
+```js
+const {settings} = await cdp.send('Browser.setProxySettings', {
+  profileId: profile.id,
+  type: 'No proxy',
+  settings: {
+    user: '',
+    free: '',
+    tor: '',
+    datacenter: '',
+    mobile: '',
+    resident: '',
+  },
+});
+```
+
+Use a custom user proxy:
+
+```js
+const {settings} = await cdp.send('Browser.setProxySettings', {
+  profileId: profile.id,
+  type: 'User proxy',
+  settings: {
+    user: 'http://user:pass@host:8080',
+    free: '',
+    tor: '',
+    datacenter: '',
+    mobile: '',
+    resident: '',
+  },
+});
+```
+
+Use a free proxy in Italy:
+
+```js
+const {settings} = await cdp.send('Browser.setProxySettings', {
+  profileId: profile.id,
+  type: 'Free proxy',
+  settings: {
+    user: '',
+    free: 'IT',
+    tor: '',
+    datacenter: '',
+    mobile: '',
+    resident: '',
+  },
+});
+```
+
+Use a free Tor proxy in the United States:
+
+```js
+const {settings} = await cdp.send('Browser.setProxySettings', {
+  profileId: profile.id,
+  type: 'Free Tor proxy',
+  settings: {
+    user: '',
+    free: '',
+    tor: 'US',
+    datacenter: '',
+    mobile: '',
+    resident: '',
+  },
+});
+```
+
+Use a datacenter proxy in Germany:
+
+```js
+const {settings} = await cdp.send('Browser.setProxySettings', {
+  profileId: profile.id,
+  type: 'Datacenter proxy',
+  settings: {
+    user: '',
+    free: '',
+    tor: '',
+    datacenter: 'DE',
+    mobile: '',
+    resident: '',
+  },
+});
+```
+
+Use a mobile proxy in France:
+
+```js
+const {settings} = await cdp.send('Browser.setProxySettings', {
+  profileId: profile.id,
+  type: 'Mobile proxy',
+  settings: {
+    user: '',
+    free: '',
+    tor: '',
+    datacenter: '',
+    mobile: 'FR',
+    resident: '',
+  },
+});
+```
+
+Use a residential proxy in Spain:
+
+```js
+const {settings} = await cdp.send('Browser.setProxySettings', {
+  profileId: profile.id,
+  type: 'Resident proxy',
+  settings: {
+    user: '',
+    free: '',
+    tor: '',
+    datacenter: '',
+    mobile: '',
+    resident: 'ES',
+  },
+});
+```
+
 Change only the active proxy type:
 
 ```js
@@ -321,6 +456,112 @@ const {started} = await cdp.send('Browser.requestNewProxy', {
 `profileId` is optional for proxy methods. If it is omitted, the browser uses
 the default loaded profile. `setProxySettings.settings` must contain the keys
 `user`, `free`, `tor`, `datacenter`, `mobile`, and `resident`.
+
+Successful `getProxySettings`, `setProxySettings`, and `setProxyType` calls
+return the same settings shape used by `chrome://settings/manageProxy`:
+
+```json
+{
+  "settings": {
+    "userProxy": "http://user:pass@host:8080",
+    "publicIP": "64.190.76.13",
+    "timezone": "Europe/Rome",
+    "city": "Turin",
+    "proxyStatusString": "update proxy done",
+    "proxyStatus": "ProxyOk",
+    "currentProxy": "Free proxy",
+    "fingerprintCheck": {
+      "checkerStatus": "approved",
+      "fingerprintStatus": "consistent"
+    },
+    "availableProxies": {
+      "Free proxy": {
+        "countryValue": "IT",
+        "countriesSelect": [
+          {"name": "Italy", "value": "IT", "is_selected": true}
+        ]
+      },
+      "Free Tor proxy": {
+        "countryValue": "US",
+        "countriesSelect": []
+      },
+      "Datacenter proxy": {
+        "countryValue": "DE",
+        "countriesSelect": [],
+        "trafficRemaining": "1.00 GB"
+      },
+      "Mobile proxy": {
+        "countryValue": "FR",
+        "countriesSelect": [],
+        "trafficRemaining": "1.00 GB"
+      },
+      "Resident proxy": {
+        "countryValue": "ES",
+        "countriesSelect": [],
+        "trafficRemaining": "1.00 GB"
+      }
+    },
+    "selectInfo": [
+      {
+        "name": "Free proxy",
+        "value": "Public proxies for quick tests only; unreliable and risky.",
+        "is_selected": true,
+        "disabled": false
+      }
+    ],
+    "trafficPurchasePlans": [],
+    "trafficPricePerGb": 0,
+    "defaultTrafficPurchasePlanName": ""
+  }
+}
+```
+
+The info chips in `chrome://settings/manageProxy` are populated from this
+response:
+
+- Type: `settings.currentProxy`
+- Your IP: `settings.publicIP`
+- Location: `settings.city`
+- Timezone: `settings.timezone`
+- IPhey status: `settings.fingerprintCheck.checkerStatus`
+- Fingerprint status: `settings.fingerprintCheck.fingerprintStatus`
+
+Proxy health status can be `ProxyOk`, `ProxyCheckHealthInProgress`,
+`ProxyCheckHealthFailed`, `ProxyCheckHealthLongTimeout`,
+`ProxyCheckHealthVeryLongTimeout`, `ProxyChanged`, `ProxyChangingIp`,
+`ProxyNotFound`, or `ProxyStatusUnknown`.
+
+`setProxySettings` and `setProxyType` return immediately after browser-side
+settings are updated. For catalog proxy types, fetching the actual
+`connectionString` and refreshing `publicIP`, `city`, `timezone`, and
+fingerprint status can finish later. Poll `Browser.getProxySettings` or call
+`Browser.checkProxyConnection` and wait until `proxyStatus` reaches a terminal
+value such as `ProxyOk` or `ProxyCheckHealthFailed`.
+
+Action methods return only whether the browser started the action:
+
+```json
+{"started": true}
+```
+
+`Browser.checkProxyConnection` returns `{"started": false}` for an empty
+`User proxy`. `Browser.requestNewProxy` returns `{"started": false}` when the
+current type is not `Datacenter proxy`, `Mobile proxy`, or `Resident proxy`, or
+when paid proxy traffic is exhausted.
+
+Invalid proxy requests fail as CDP errors rather than settings payloads:
+
+```json
+{"error": {"code": -32602, "message": "type must not be empty"}}
+```
+
+```json
+{"error": {"code": -32000, "message": "Unknown proxy type"}}
+```
+
+```json
+{"error": {"code": -32000, "message": "settings must contain string fields: user, free, tor, datacenter, mobile, resident"}}
+```
 
 ## Auth examples
 

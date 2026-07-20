@@ -103,6 +103,14 @@ async function main() {
     throw new Error('No profiles left to create for the current account.');
   }
 
+  const proxyPlan = [
+  {type: 'Free proxy', free: 'IT'},
+  {type: 'Free Tor proxy', tor: 'US'},
+  {type: 'Datacenter proxy', datacenter: 'DE'},
+  {type: 'Mobile proxy', mobile: 'FR'},
+  {type: 'Resident proxy', resident: 'ES'},
+  ];
+
   for (let index = 0; index < count; index += 1) {
     const { profile } = await cdp.send('Browser.createProfile', {
       name: `Automation Profile ${index + 1}`,
@@ -113,6 +121,23 @@ async function main() {
       profileId: profile.id,
     });
     console.log(windowInfo.windowId, windowInfo.targetId);
+
+    onst plan = proxyPlan[index % proxyPlan.length];
+
+  const { settings } = await cdp.send('Browser.setProxySettings', {
+    profileId: profile.id,
+    type: plan.type,
+    settings: {
+      user: '',
+      free: plan.free ?? '',
+      tor: plan.tor ?? '',
+      datacenter: plan.datacenter ?? '',
+      mobile: plan.mobile ?? '',
+      resident: plan.resident ?? '',
+    },
+  });
+
+  console.log('Proxy settings:', settings.currentProxy, settings.proxyStatus)
   }
 
   await cdp.send('Browser.verify');
