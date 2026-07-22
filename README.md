@@ -61,7 +61,6 @@ async function main() {
     args: [
       '--remote-debugging-port=0',
       '--user-data-dir=/tmp/onebrowser-cdp-profile',
-      '--enable-features=DevToolsBrowserProfileMethods,DevToolsBrowserFingerprintMethods,DevToolsBrowserProxyMethods',
       '--no-first-run',
     ],
   });

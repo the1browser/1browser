@@ -50,7 +50,6 @@ async function main() {
     args: [
       '--remote-debugging-port=0',
       '--user-data-dir=/tmp/onebrowser-cdp-profile',
-      '--enable-features=DevToolsBrowserProfileMethods,DevToolsBrowserFingerprintMethods,DevToolsBrowserProxyMethods',
       '--no-first-run',
     ],
   });
@@ -715,15 +714,6 @@ Any CDP WebSocket client can call the same methods directly:
 ```
 
 ## Troubleshooting
-
-`Browser.getProfiles is disabled` means the browser was started without
-`--enable-features=DevToolsBrowserProfileMethods`.
-
-`Browser.getFingerprintSetting is disabled` means the browser was started
-without `--enable-features=DevToolsBrowserFingerprintMethods`.
-
-`Browser.getProxySettings is disabled` means the browser was started without
-`--enable-features=DevToolsBrowserProxyMethods`.
 
 `Unknown method` or `Method not found` means the running 1browser build does not
 include that custom CDP method in its generated protocol and browser handler.
