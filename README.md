@@ -1,6 +1,7 @@
 # 1browser
 
 ## Getting Started
+We are committed to providing fixes and support for the latest version of [1browser](https://1browser.com/download/).
 
 Where is token? API token is <a href="https://app.1browser.com/api" target="_blank">here</a>.
 
