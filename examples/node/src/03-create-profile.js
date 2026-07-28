@@ -1,11 +1,11 @@
 'use strict';
 
 const {loadConfig} = require('./config');
-const {OneBrowserClient} = require('./one-browser-client');
+const {OneBrowser} = require('@1browser/sdk');
 
 async function main() {
   const config = loadConfig();
-  const client = await OneBrowserClient.launch(config);
+  const client = await OneBrowser.launch(config);
   try {
     await client.ensureAuthenticated();
     const profile = await client.createProfile(config.profileName);

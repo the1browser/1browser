@@ -1,7 +1,9 @@
 # 1browser
 
 1browser exposes custom Chrome DevTools Protocol (CDP) methods for automating
-authentication, persistent browser profiles, fingerprints, and proxies. Use the
+authentication, persistent browser profiles, fingerprints, and proxies. The
+repository includes a Node.js SDK that provides the safe lifecycle as a small,
+stable API. Use the
 [latest 1browser release](https://1browser.com/download/).
 
 ## Mandatory automation lifecycle
@@ -20,10 +22,54 @@ See [Automation lifecycle](docs/automation-lifecycle.md) for the first-run and
 repeated-run flows and [User data directory](docs/user-data-directory.md) for
 storage requirements.
 
-## Quick start
+## Node.js SDK quick start
 
-The example requires Node.js and `puppeteer-core`; it never uses a
-Puppeteer-downloaded browser.
+The SDK requires Node.js 22.12 or later, pins `puppeteer-core`, and never uses a
+Puppeteer-downloaded browser. It is not published to npm yet; install it from
+this repository:
+
+```bash
+npm install
+```
+
+To consume the current checkout from another local project, run
+`npm install /absolute/path/to/1browser` in that project.
+
+A minimal application looks like:
+
+```js
+const {OneBrowser, loadEnvironmentConfig} = require('@1browser/sdk');
+
+const client = await OneBrowser.launch(loadEnvironmentConfig());
+try {
+  await client.ensureAuthenticated();
+  const {profiles} = await client.ensureProfiles({
+    count: 2,
+    namePrefix: 'Example Task',
+  });
+  const results = await client.runForProfiles({
+    profiles,
+    concurrency: 2,
+    task: async ({page}) => {
+      await page.goto('https://example.com', {
+        waitUntil: 'domcontentloaded',
+      });
+      return {url: page.url(), title: await page.title()};
+    },
+  });
+  console.table(results);
+} finally {
+  await client.close();
+}
+```
+
+See the [SDK package documentation](docs/node-sdk.md) for profiles,
+errors, target resolution, TypeScript declarations, compatibility, and the
+low-level CDP escape hatch.
+
+## Examples
+
+The examples consume the local SDK package:
 
 ```bash
 cd examples/node
@@ -60,6 +106,8 @@ Continue with the focused examples in [`examples/node`](examples/node):
 - create one profile after checking the account limit;
 - open one active persistent profile;
 - configure a user proxy;
+- ensure and search from multiple deterministic profiles with bounded
+  concurrency;
 - explicitly log out.
 
 ## Documentation
@@ -68,6 +116,7 @@ Continue with the focused examples in [`examples/node`](examples/node):
 - [Authentication](docs/authentication.md)
 - [User data directory](docs/user-data-directory.md)
 - [CDP method reference](docs/cdp-api.md)
+- [Node.js SDK](docs/node-sdk.md)
 - [HTTP API](docs/api/index.md)
 - [Instructions for AI agents](AGENTS.md)
 

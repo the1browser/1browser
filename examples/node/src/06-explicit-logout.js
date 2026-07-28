@@ -1,10 +1,10 @@
 'use strict';
 
 const {loadConfig} = require('./config');
-const {OneBrowserClient} = require('./one-browser-client');
+const {OneBrowser} = require('@1browser/sdk');
 
 async function main() {
-  const client = await OneBrowserClient.launch(loadConfig());
+  const client = await OneBrowser.launch(loadConfig());
   try {
     const authState = await client.getAuthState();
     if (authState.signedIn) {

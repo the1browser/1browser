@@ -1,22 +1,36 @@
 'use strict';
 
 const {loadConfig} = require('./config');
-const {OneBrowserClient} = require('./one-browser-client');
+const {OneBrowser} = require('@1browser/sdk');
 
 async function main() {
   const config = loadConfig();
-  const client = await OneBrowserClient.launch(config);
+  const client = await OneBrowser.launch(config);
   try {
     await client.ensureAuthenticated();
-    const profile = await client.getActivePersistentProfile();
+    const [profile] = await client.getPersistentProfiles();
     if (!profile) {
       throw new Error('No active persistent profile is available.');
     }
-
-    const settings = await client.configureUserProxy(
-      profile.id,
-      config.proxyUrl,
+    if (!config.proxyUrl) {
+      throw new Error('Set ONE_PROXY_URL before configuring a user proxy.');
+    }
+    const {settings: current} = await client.send(
+      'Browser.getProxySettings',
+      {profileId: profile.id},
     );
+    const {settings} = await client.send('Browser.setProxySettings', {
+      profileId: profile.id,
+      type: 'User proxy',
+      settings: {
+        user: config.proxyUrl,
+        free: current.free ?? '',
+        tor: current.tor ?? '',
+        datacenter: current.datacenter ?? '',
+        mobile: current.mobile ?? '',
+        resident: current.resident ?? '',
+      },
+    });
     console.log(`Proxy type for ${profile.id}: ${settings.currentProxy}`);
   } finally {
     await client.close();

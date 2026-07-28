@@ -10,13 +10,15 @@
     "open-profile": "node src/04-open-profile.js",
     "configure-proxy": "node src/05-configure-proxy.js",
     "logout": "node src/06-explicit-logout.js",
-    "check": "node --check src/config.js && node --check src/one-browser-client.js && node --check src/01-auth-and-reuse-session.js && node --check src/02-list-profiles.js && node --check src/03-create-profile.js && node --check src/04-open-profile.js && node --check src/05-configure-proxy.js && node --check src/06-explicit-logout.js",
+    "multi-profile-search": "node src/07-multi-profile-search.js",
+    "check": "node --check src/config.js && node --check src/01-auth-and-reuse-session.js && node --check src/02-list-profiles.js && node --check src/03-create-profile.js && node --check src/04-open-profile.js && node --check src/05-configure-proxy.js && node --check src/06-explicit-logout.js && node --check src/07-multi-profile-search.js && node --check src/sites/amazon-search.js",
     "test": "node --test"
   },
   "engines": {
     "node": ">=22.12.0"
   },
   "dependencies": {
+    "@1browser/sdk": "file:../..",
     "dotenv": "17.4.2",
     "puppeteer-core": "25.3.0"
   }

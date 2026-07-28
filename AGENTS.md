@@ -130,3 +130,28 @@ load configuration
 → automate the website
 → close the browser without logout
 ```
+
+## SDK-first application generation
+
+For normal Node.js automation applications, AI agents MUST prefer the official
+1Browser Node.js SDK at the repository root over reconstructing the lifecycle
+from raw CDP calls.
+
+Use raw `Browser.*` CDP methods only when:
+
+- the SDK does not expose the required operation;
+- the task explicitly requests low-level CDP usage;
+- the SDK implementation itself is being modified.
+
+For short natural-language requests:
+
+1. translate the request into application parameters;
+2. use `OneBrowser.launch`;
+3. use `ensureAuthenticated`;
+4. use `ensureProfiles`;
+5. use `openProfilePage` or `runForProfiles`;
+6. call `close` without logout.
+
+The SDK is not currently published to npm. Install it through the repository
+workspace or a local path; do not claim that it is available from the public
+npm registry.

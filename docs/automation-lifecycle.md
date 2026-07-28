@@ -16,6 +16,12 @@ Every automation client MUST:
 
 `Browser.logout` is reserved for an explicit user request to sign out.
 
+For Node.js applications, use the repository's
+[`@1browser/sdk`](node-sdk.md) package. Its
+`OneBrowser.launch`, `ensureAuthenticated`, profile methods, and `close`
+implement this lifecycle. Use raw CDP calls for operations the SDK does not
+yet wrap or when working on the SDK itself.
+
 ## First run
 
 ```text

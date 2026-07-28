@@ -1,19 +1,20 @@
 'use strict';
 
 const {loadConfig} = require('./config');
-const {OneBrowserClient} = require('./one-browser-client');
+const {OneBrowser} = require('@1browser/sdk');
 
 async function main() {
-  const client = await OneBrowserClient.launch(loadConfig());
+  const client = await OneBrowser.launch(loadConfig());
   try {
     await client.ensureAuthenticated();
-    const profile = await client.getActivePersistentProfile();
+    const [profile] = await client.getPersistentProfiles();
     if (!profile) {
       throw new Error('No active persistent profile is available.');
     }
 
-    const {windowId, targetId} = await client.openProfileWindow(profile.id);
+    const {windowId, targetId, page} = await client.openProfilePage(profile.id);
     console.log(`Opened profile ${profile.id}: window ${windowId}, target ${targetId}.`);
+    await page.close();
   } finally {
     await client.close();
   }
