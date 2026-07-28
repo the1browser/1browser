@@ -67,6 +67,10 @@ See the [SDK package documentation](docs/node-sdk.md) for profiles,
 errors, target resolution, TypeScript declarations, compatibility, and the
 low-level CDP escape hatch.
 
+Profile deletion is explicit through `deleteProfile(profileId)` or
+`deleteProfiles(profileIds)`. The SDK never deletes extra profiles
+automatically.
+
 ## Examples
 
 The examples consume the local SDK package:

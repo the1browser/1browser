@@ -137,6 +137,43 @@ anything. The underlying CDP API is not transactional, so an unexpected
 browser or transport failure during a multi-profile creation sequence can
 still leave profiles that were created before that failure.
 
+## Deleting profiles
+
+Deletion is always explicit. `ensureProfiles()` never deletes profiles when a
+later call requests a smaller count.
+
+Delete one profile by its `ProfileInfo.id`:
+
+```js
+const result = await client.deleteProfile(profile.id);
+console.log(result); // {profileId: '...', success: true}
+```
+
+The method throws `ProfileDeletionError` unless
+`Browser.deleteProfileById` returns `{success: true}`.
+
+Delete several explicitly selected IDs:
+
+```js
+const results = await client.deleteProfiles(
+  profiles.map((profile) => profile.id),
+);
+
+for (const result of results) {
+  if (!result.success) {
+    console.error(result.profileId, result.error.message);
+  }
+}
+```
+
+The complete ID list is validated before the first deletion, duplicate IDs
+are rejected, and deletions run sequentially. The result order matches the
+input order. A browser failure for one ID is recorded in that ID's result and
+does not hide or skip the remaining requested IDs.
+
+Never pass display names to deletion methods. Names are not unique and the SDK
+does not translate names or prefixes into IDs.
+
 ## Profile pages and target resolution
 
 `openProfilePage(profile.id)` calls `Browser.createWindowForProfile`, observes
@@ -171,6 +208,7 @@ The public error hierarchy is:
 - `ProfileError`
 - `ProfileLimitError`
 - `ProfileTargetError`
+- `ProfileDeletionError`
 - `ProfileTaskError`
 - `ClientClosedError`
 
@@ -208,6 +246,8 @@ unchanged. Prefer the typed high-level methods when one exists.
 - `getProfiles()`
 - `getPersistentProfiles(options?)`
 - `createProfile(name)`
+- `deleteProfile(profileId)`
+- `deleteProfiles(profileIds)`
 - `ensureProfiles(options)`
 - `openProfilePage(profileId, options?)`
 - `runForProfiles(options)`
@@ -228,6 +268,7 @@ The SDK maps directly to the documented methods:
 | `ensureAuthenticated` | `getAuthState`, `signin` |
 | `getProfiles` | `getProfiles` |
 | `createProfile` | `getAvailableProfileCreationCount`, `createProfile` |
+| `deleteProfile`, `deleteProfiles` | `deleteProfileById` |
 | `ensureProfiles` | `getProfiles`, `getAvailableProfileCreationCount`, `createProfile` |
 | `openProfilePage` | `createWindowForProfile` |
 | `logout` | `logout` |

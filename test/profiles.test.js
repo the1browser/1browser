@@ -5,10 +5,16 @@ const test = require('node:test');
 
 const {
   createProfile,
+  deleteProfile,
+  deleteProfiles,
   ensureProfiles,
   persistentProfiles,
 } = require('../src/profiles');
-const {ProfileError, ProfileLimitError} = require('../src/errors');
+const {
+  ProfileDeletionError,
+  ProfileError,
+  ProfileLimitError,
+} = require('../src/errors');
 
 function session(handler) {
   const calls = [];
@@ -168,4 +174,83 @@ test('createProfile checks the limit and passes only a display name', async () =
     method: 'Browser.createProfile',
     params: {name: 'Display Name'},
   });
+});
+
+test('deleteProfile passes ProfileInfo.id and requires confirmed deletion', async () => {
+  const {calls, cdp} = session((method, params) => {
+    assert.equal(method, 'Browser.deleteProfileById');
+    assert.deepEqual(params, {profileId: 'profile-id'});
+    return {success: true};
+  });
+  const result = await deleteProfile(cdp, 'profile-id');
+  assert.deepEqual(result, {profileId: 'profile-id', success: true});
+  assert.equal(calls.length, 1);
+});
+
+test('deleteProfile rejects an unconfirmed deletion', async () => {
+  const {cdp} = session(() => ({success: false}));
+  await assert.rejects(
+    deleteProfile(cdp, 'profile-id'),
+    (error) =>
+      error instanceof ProfileDeletionError &&
+      error.code === 'ERR_ONE_BROWSER_PROFILE_DELETE',
+  );
+});
+
+test('deleteProfile wraps CDP failures', async () => {
+  const cause = new Error('transport failed');
+  const {cdp} = session(() => {
+    throw cause;
+  });
+  await assert.rejects(
+    deleteProfile(cdp, 'profile-id'),
+    (error) =>
+      error instanceof ProfileDeletionError &&
+      error.cause === cause,
+  );
+});
+
+test('deleteProfiles validates every ID before deleting anything', async () => {
+  const {calls, cdp} = session(() => ({success: true}));
+  await assert.rejects(
+    deleteProfiles(cdp, ['valid-id', '']),
+    ProfileError,
+  );
+  assert.equal(calls.length, 0);
+});
+
+test('deleteProfiles rejects duplicate IDs before deleting anything', async () => {
+  const {calls, cdp} = session(() => ({success: true}));
+  await assert.rejects(
+    deleteProfiles(cdp, ['same-id', 'same-id']),
+    ProfileDeletionError,
+  );
+  assert.equal(calls.length, 0);
+});
+
+test('deleteProfiles returns one ordered result per explicit ID', async () => {
+  const {calls, cdp} = session((_method, {profileId}) => {
+    if (profileId === 'profile-2') {
+      return {success: false};
+    }
+    return {success: true};
+  });
+  const results = await deleteProfiles(cdp, [
+    'profile-1',
+    'profile-2',
+    'profile-3',
+  ]);
+  assert.deepEqual(
+    results.map(({profileId, success}) => ({profileId, success})),
+    [
+      {profileId: 'profile-1', success: true},
+      {profileId: 'profile-2', success: false},
+      {profileId: 'profile-3', success: true},
+    ],
+  );
+  assert.match(results[1].error.message, /did not confirm deletion/);
+  assert.deepEqual(
+    calls.map(({params}) => params.profileId),
+    ['profile-1', 'profile-2', 'profile-3'],
+  );
 });

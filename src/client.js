@@ -14,6 +14,8 @@ const {
 } = require('./errors');
 const {
   createProfile,
+  deleteProfile,
+  deleteProfiles,
   ensureProfiles,
   persistentProfiles,
   validateProfileId,
@@ -121,6 +123,16 @@ class OneBrowser {
   async createProfile(name) {
     await this.ensureAccountReady();
     return createProfile(this.cdp, name);
+  }
+
+  async deleteProfile(profileId) {
+    await this.ensureAccountReady();
+    return deleteProfile(this.cdp, profileId);
+  }
+
+  async deleteProfiles(profileIds) {
+    await this.ensureAccountReady();
+    return deleteProfiles(this.cdp, profileIds);
   }
 
   async ensureProfiles(options) {

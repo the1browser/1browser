@@ -56,6 +56,12 @@ export interface OpenProfilePageResult {
   page: Page;
 }
 
+export interface ProfileDeletionResult {
+  profileId: string;
+  success: boolean;
+  error?: {name: string; message: string};
+}
+
 export interface ProfileTaskResult<T> {
   profileId: string;
   profileName?: string;
@@ -75,6 +81,7 @@ export class AuthenticationTimeoutError extends AuthenticationError {}
 export class ProfileError extends OneBrowserError {}
 export class ProfileLimitError extends ProfileError {}
 export class ProfileTargetError extends ProfileError {}
+export class ProfileDeletionError extends ProfileError {}
 export class ProfileTaskError extends OneBrowserError {}
 export class ClientClosedError extends OneBrowserError {}
 
@@ -95,6 +102,8 @@ export class OneBrowser {
     includeOmitted?: boolean;
   }): Promise<ProfileInfo[]>;
   createProfile(name: string): Promise<ProfileInfo>;
+  deleteProfile(profileId: string): Promise<ProfileDeletionResult>;
+  deleteProfiles(profileIds: string[]): Promise<ProfileDeletionResult[]>;
   ensureProfiles(options: {
     count: number;
     namePrefix: string;

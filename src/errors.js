@@ -50,6 +50,12 @@ class ProfileTargetError extends ProfileError {
   }
 }
 
+class ProfileDeletionError extends ProfileError {
+  constructor(message, options = {}) {
+    super(message, {code: 'ERR_ONE_BROWSER_PROFILE_DELETE', ...options});
+  }
+}
+
 class ProfileTaskError extends OneBrowserError {
   constructor(message, options = {}) {
     super(message, {code: 'ERR_ONE_BROWSER_TASK', ...options});
@@ -71,6 +77,7 @@ module.exports = {
   ProfileError,
   ProfileLimitError,
   ProfileTargetError,
+  ProfileDeletionError,
   ProfileTaskError,
   ClientClosedError,
 };

@@ -1,9 +1,11 @@
 'use strict';
 
 const {
+  ProfileDeletionError,
   ProfileError,
   ProfileLimitError,
 } = require('./errors');
+const {serializeError} = require('./results');
 
 function validateProfileId(profileId) {
   if (typeof profileId !== 'string' || profileId.trim() === '') {
@@ -97,6 +99,55 @@ async function createProfile(cdp, name) {
   return createNamedProfile(cdp, validatedName);
 }
 
+async function deleteProfile(cdp, profileId) {
+  const id = validateProfileId(profileId);
+  let response;
+  try {
+    response = await cdp.send('Browser.deleteProfileById', {profileId: id});
+  } catch (error) {
+    throw new ProfileDeletionError(
+      `Browser.deleteProfileById failed for profile ${id}.`,
+      {cause: error},
+    );
+  }
+  if (response?.success !== true) {
+    throw new ProfileDeletionError(
+      `1Browser did not confirm deletion of profile ${id}.`,
+    );
+  }
+  return {profileId: id, success: true};
+}
+
+function validateProfileIds(profileIds) {
+  if (!Array.isArray(profileIds)) {
+    throw new ProfileDeletionError('profileIds must be an array.');
+  }
+  const validated = profileIds.map(validateProfileId);
+  if (new Set(validated).size !== validated.length) {
+    throw new ProfileDeletionError(
+      'profileIds must not contain duplicate IDs.',
+    );
+  }
+  return validated;
+}
+
+async function deleteProfiles(cdp, profileIds) {
+  const validated = validateProfileIds(profileIds);
+  const results = [];
+  for (const profileId of validated) {
+    try {
+      results.push(await deleteProfile(cdp, profileId));
+    } catch (error) {
+      results.push({
+        profileId,
+        success: false,
+        error: serializeError(error),
+      });
+    }
+  }
+  return results;
+}
+
 async function ensureProfiles(cdp, profiles, options) {
   const {count, namePrefix, mode} = validateEnsureOptions(options);
   const current = persistentProfiles(profiles);
@@ -165,7 +216,10 @@ async function ensureProfiles(cdp, profiles, options) {
 
 module.exports = {
   createProfile,
+  deleteProfile,
+  deleteProfiles,
   ensureProfiles,
   persistentProfiles,
+  validateProfileIds,
   validateProfileId,
 };

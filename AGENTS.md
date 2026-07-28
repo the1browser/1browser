@@ -98,6 +98,12 @@ Create a profile only when required by the task. Before creating one, call
 `Browser.getAvailableProfileCreationCount`. Do not create all available
 profiles as part of a normal example.
 
+Delete profiles only when the user explicitly requests deletion. In Node.js
+applications use the SDK's `deleteProfile` or `deleteProfiles` methods and
+pass explicit `ProfileInfo.id` values. Never infer deletion targets from
+display names, list positions, or a reduced `ensureProfiles` count. Check every
+bulk deletion result.
+
 ## Code generation requirements
 
 Generated examples MUST:
