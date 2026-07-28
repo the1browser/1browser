@@ -5,109 +5,63 @@
 persistent browser profiles, fingerprint masking settings, proxy settings, and
 the 1browser auth flow from the browser process.
 
+## Mandatory lifecycle
+
+Before using the method reference, follow the
+[mandatory automation lifecycle](automation-lifecycle.md):
+
+1. Launch the executable from `ONE_BROWSER_PATH` with the persistent
+   `ONE_USER_DATA_DIR`.
+2. Call `Browser.getAuthState({validateOnline: true})`.
+3. Sign in only if the persisted session is unavailable.
+4. Confirm the online auth state before account-dependent methods.
+5. Reuse the same user-data directory on later runs.
+6. Close the browser without `Browser.logout`.
+
+`Browser.logout` is an explicit sign-out operation, not normal cleanup.
+
+## User data directory
+
+`--user-data-dir` stores browser-level persistent state, including the
+authentication session and local Chromium profile registry. It is not the same
+as a 1browser profile.
+
+Every client MUST provide an explicit persistent path from
+`ONE_USER_DATA_DIR`. Do not omit it, use a temporary or random directory, fall
+back to the system browser directory, or share it between concurrent browser
+processes. See [User data directory](user-data-directory.md).
+
+## Install and run
+
+The maintained examples use `puppeteer-core`, which does not select or download
+a browser executable for this project:
 
 ```bash
-npm install puppeteer-core
+cd examples/node
+npm install
+cp .env.example .env
 ```
 
-Set `ONE_BROWSER_PATH` to the installed 1browser executable path before running
-the script. If the script signs in with `Browser.signin`, also set `ONE_EMAIL`
-and `ONE_PASSWORD`:
+Set the required persistent paths in `.env`:
+
+```dotenv
+ONE_BROWSER_PATH=/absolute/path/to/1browser
+ONE_USER_DATA_DIR=/absolute/path/to/persistent/1browser-automation-data
+ONE_EMAIL=<email>
+ONE_PASSWORD=<password>
+```
+
+Credentials are only required when the persisted session is unavailable. Run
+the canonical example:
 
 ```bash
-# macOS
-export ONE_BROWSER_PATH="/Applications/1browser.app/Contents/MacOS/1browser"
-export ONE_EMAIL="<email>"
-export ONE_PASSWORD="<password>"
-
-# Linux
-export ONE_BROWSER_PATH="/path/to/1browser"
-export ONE_EMAIL="<email>"
-export ONE_PASSWORD="<password>"
+npm run auth
 ```
 
-```powershell
-# Windows PowerShell
-$env:ONE_BROWSER_PATH = "C:\Path\To\1browser.exe"
-$env:ONE_EMAIL = "<email>"
-$env:ONE_PASSWORD = "<password>"
-```
-
-```js
-const puppeteer = require('puppeteer-core');
-
-async function main() {
-  const browser = await puppeteer.launch({
-    executablePath: process.env.ONE_BROWSER_PATH,
-    headless: false,
-    defaultViewport: null,
-    args: [
-      '--remote-debugging-port=0',
-      '--user-data-dir=/tmp/onebrowser-cdp-profile',
-      '--no-first-run',
-    ],
-  });
-
-  const page = await browser.newPage();
-  const cdp = await page.target().createCDPSession();
-
-  // Check whether the persisted auth session is still valid.
-  const authState = await cdp.send('Browser.getAuthState', {
-    validateOnline: true,
-  });
-
-  if (!authState.signedIn) {
-    const email = process.env.ONE_EMAIL;
-    const password = process.env.ONE_PASSWORD;
-
-    if (!email || !password) {
-      throw new Error('Set ONE_EMAIL and ONE_PASSWORD before running this script.');
-    }
-
-    // Browser-process auth flow for an existing account.
-    const signin = await cdp.send('Browser.signin', {
-      email,
-      password,
-    });
-    console.log(signin);
-  }
-
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  await delay(5000);
-
-  const { profiles } = await cdp.send('Browser.getProfiles');
-  console.log(profiles);
-
-  const { count } = await cdp.send('Browser.getAvailableProfileCreationCount');
-  console.log(`Profiles left to create: ${count}`);
-
-  if (count <= 0) {
-    throw new Error('No profiles left to create for the current account.');
-  }
-
-  for (let index = 0; index < count; index += 1) {
-    const { profile } = await cdp.send('Browser.createProfile', {
-      name: `Automation Profile ${index + 1}`,
-    });
-    console.log(profile);
-
-    const windowInfo = await cdp.send('Browser.createWindowForProfile', {
-      profileId: profile.id,
-    });
-    console.log(windowInfo.windowId, windowInfo.targetId);
-  }
-
-  await cdp.send('Browser.verify');
-  await cdp.send('Browser.logout');
-
-  await browser.close();
-}
-
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
-```
+The executable source is
+[`01-auth-and-reuse-session.js`](../examples/node/src/01-auth-and-reuse-session.js).
+Additional examples each demonstrate one operation without mixing profile
+creation, proxy changes, verification, and logout into normal startup.
 
 ## Methods
 
@@ -558,22 +512,51 @@ Invalid proxy requests fail as CDP errors rather than settings payloads:
 
 ## Auth examples
 
-Check whether the current browser session is signed in:
+Check whether the persisted browser session is signed in:
 
 ```js
-const authState = await cdp.send('Browser.getAuthState', {
+let authState = await cdp.send('Browser.getAuthState', {
   validateOnline: true,
 });
 
 if (!authState.signedIn) {
-  await cdp.send('Browser.login');
+  const email = process.env.ONE_EMAIL;
+  const password = process.env.ONE_PASSWORD;
+  if (!email || !password) {
+    throw new Error('Set ONE_EMAIL and ONE_PASSWORD.');
+  }
+
+  const signin = await cdp.send('Browser.signin', {email, password});
+  if (!signin.success) {
+    throw new Error(`Signin failed with response code ${signin.responseCode}.`);
+  }
+
+  const deadline = Date.now() + 15000;
+  do {
+    authState = await cdp.send('Browser.getAuthState', {
+      validateOnline: true,
+    });
+    if (authState.signedIn) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  } while (Date.now() < deadline);
+
+  if (!authState.signedIn) {
+    throw new Error(`Authentication is not confirmed: ${authState.state}.`);
+  }
 }
 ```
 
-Use this before login/signin when reusing the same `--user-data-dir`. If the
-session is still valid, repeated authorization is not required. If the token is
-expired or the session is missing, `signedIn` is `false` and `state` is
-`signed_out`, `expired`, or `unknown`.
+Use this lifecycle before account-dependent methods when reusing the same
+`ONE_USER_DATA_DIR`. The second online auth check is bounded because the
+browser can complete its internal signin flow asynchronously. The maintained
+[`OneBrowserClient`](../examples/node/src/one-browser-client.js) implements
+the same confirmation.
+
+If the session is still valid, repeated authorization is not required. If it
+has expired or is missing, `signedIn` is `false` and `state` is `signed_out`,
+`expired`, or `unknown`.
 
 Open the web login page:
 
@@ -590,7 +573,7 @@ const signup = await cdp.send('Browser.signup', {
 });
 
 if (!signup.success) {
-  throw new Error(`Signup failed: ${signup.responseCode} ${signup.body ?? ''}`);
+  throw new Error(`Signup failed with response code ${signup.responseCode}.`);
 }
 ```
 
@@ -603,7 +586,7 @@ const signin = await cdp.send('Browser.signin', {
 });
 
 if (!signin.success) {
-  throw new Error(`Signin failed: ${signin.responseCode} ${signin.body ?? ''}`);
+  throw new Error(`Signin failed with response code ${signin.responseCode}.`);
 }
 ```
 
@@ -613,10 +596,21 @@ Send email verification for the current user:
 const verify = await cdp.send('Browser.verify');
 ```
 
+## Explicit logout
+
+`Browser.logout` MUST be called only when the requested operation is to sign
+the user out. Do not include it in routine cleanup. Closing Puppeteer with
+`browser.close()` preserves the authentication session in
+`ONE_USER_DATA_DIR`.
+
 Sign out the current user:
 
 ```js
 const logout = await cdp.send('Browser.logout');
+
+if (!logout.success) {
+  throw new Error(`Logout failed with response code ${logout.responseCode}.`);
+}
 ```
 
 Backend business errors, such as invalid credentials or an already registered
@@ -640,47 +634,47 @@ Any CDP WebSocket client can call the same methods directly:
 ```
 
 ```json
-{"id":4,"method":"Browser.createWindowForProfile","params":{"profileId":"Profile 1"}}
+{"id":4,"method":"Browser.createWindowForProfile","params":{"profileId":"<profile-id-from-getProfiles>"}}
 ```
 
 ```json
-{"id":5,"method":"Browser.deleteProfileById","params":{"profileId":"Profile 1"}}
+{"id":5,"method":"Browser.deleteProfileById","params":{"profileId":"<profile-id-from-getProfiles>"}}
 ```
 
 ```json
-{"id":6,"method":"Browser.getFingerprintSetting","params":{"profileId":"Profile 1","name":"screen_resolution"}}
+{"id":6,"method":"Browser.getFingerprintSetting","params":{"profileId":"<profile-id-from-getProfiles>","name":"screen_resolution"}}
 ```
 
 ```json
-{"id":7,"method":"Browser.getFingerprintSettings","params":{"profileId":"Profile 1"}}
+{"id":7,"method":"Browser.getFingerprintSettings","params":{"profileId":"<profile-id-from-getProfiles>"}}
 ```
 
 ```json
-{"id":8,"method":"Browser.setFingerprintSetting","params":{"profileId":"Profile 1","name":"screen_resolution","value":"800x600"}}
+{"id":8,"method":"Browser.setFingerprintSetting","params":{"profileId":"<profile-id-from-getProfiles>","name":"screen_resolution","value":"800x600"}}
 ```
 
 ```json
-{"id":9,"method":"Browser.generateFingerprint","params":{"profileId":"Profile 1"}}
+{"id":9,"method":"Browser.generateFingerprint","params":{"profileId":"<profile-id-from-getProfiles>"}}
 ```
 
 ```json
-{"id":10,"method":"Browser.getProxySettings","params":{"profileId":"Profile 1"}}
+{"id":10,"method":"Browser.getProxySettings","params":{"profileId":"<profile-id-from-getProfiles>"}}
 ```
 
 ```json
-{"id":11,"method":"Browser.setProxySettings","params":{"profileId":"Profile 1","type":"User proxy","settings":{"user":"http://user:pass@host:8080","free":"","tor":"","datacenter":"","mobile":"","resident":""}}}
+{"id":11,"method":"Browser.setProxySettings","params":{"profileId":"<profile-id-from-getProfiles>","type":"User proxy","settings":{"user":"http://user:pass@host:8080","free":"","tor":"","datacenter":"","mobile":"","resident":""}}}
 ```
 
 ```json
-{"id":12,"method":"Browser.setProxyType","params":{"profileId":"Profile 1","type":"No proxy"}}
+{"id":12,"method":"Browser.setProxyType","params":{"profileId":"<profile-id-from-getProfiles>","type":"No proxy"}}
 ```
 
 ```json
-{"id":13,"method":"Browser.checkProxyConnection","params":{"profileId":"Profile 1"}}
+{"id":13,"method":"Browser.checkProxyConnection","params":{"profileId":"<profile-id-from-getProfiles>"}}
 ```
 
 ```json
-{"id":14,"method":"Browser.requestNewProxy","params":{"profileId":"Profile 1"}}
+{"id":14,"method":"Browser.requestNewProxy","params":{"profileId":"<profile-id-from-getProfiles>"}}
 ```
 
 ```json

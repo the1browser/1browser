@@ -1,0 +1,22 @@
+name: Node examples
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12
+          cache: npm
+          cache-dependency-path: examples/node/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test

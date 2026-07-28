@@ -1,0 +1,23 @@
+{
+  "name": "1browser-cdp-examples",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Safe lifecycle examples for 1browser CDP automation",
+  "scripts": {
+    "auth": "node src/01-auth-and-reuse-session.js",
+    "list-profiles": "node src/02-list-profiles.js",
+    "create-profile": "node src/03-create-profile.js",
+    "open-profile": "node src/04-open-profile.js",
+    "configure-proxy": "node src/05-configure-proxy.js",
+    "logout": "node src/06-explicit-logout.js",
+    "check": "node --check src/config.js && node --check src/one-browser-client.js && node --check src/01-auth-and-reuse-session.js && node --check src/02-list-profiles.js && node --check src/03-create-profile.js && node --check src/04-open-profile.js && node --check src/05-configure-proxy.js && node --check src/06-explicit-logout.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "dotenv": "17.4.2",
+    "puppeteer-core": "25.3.0"
+  }
+}
