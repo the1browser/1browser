@@ -5,12 +5,6 @@
 persistent browser profiles, fingerprint masking settings, proxy settings, and
 the 1browser auth flow from the browser process.
 
-The API is available only when the browser is launched with the matching
-feature flags. Enable all local automation methods with:
-
-```text
---enable-features=DevToolsBrowserProfileMethods,DevToolsBrowserFingerprintMethods,DevToolsBrowserProxyMethods
-```
 
 ```bash
 npm install puppeteer-core
