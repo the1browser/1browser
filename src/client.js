@@ -14,6 +14,7 @@ const {
 } = require('./errors');
 const {
   createProfile,
+  createProfileCapacityReader,
   deleteProfile,
   deleteProfiles,
   ensureProfiles,
@@ -62,6 +63,7 @@ class OneBrowser {
     this.closed = false;
     this.closePromise = undefined;
     this.authenticated = false;
+    this.profileCapacity = createProfileCapacityReader(cdp);
   }
 
   assertOpen() {
@@ -75,13 +77,20 @@ class OneBrowser {
     const state = await getAuthState(this.cdp, options);
     this.authenticated =
       state?.signedIn === true && options?.validateOnline !== false;
+    if (!this.authenticated) {
+      this.profileCapacity.reset();
+    }
     return state;
   }
 
   async ensureAuthenticated(options) {
     this.assertOpen();
+    const wasAuthenticated = this.authenticated;
     const state = await ensureAuthenticated(this.cdp, this.options, options);
     this.authenticated = true;
+    if (!wasAuthenticated) {
+      this.profileCapacity.reset();
+    }
     return state;
   }
 
@@ -103,6 +112,7 @@ class OneBrowser {
       throw new AuthenticationError(`1Browser logout failed${suffix}.`);
     }
     this.authenticated = false;
+    this.profileCapacity.reset();
   }
 
   async getProfiles() {
@@ -120,9 +130,18 @@ class OneBrowser {
     return persistentProfiles(await this.getProfiles(), options);
   }
 
+  async getAvailableProfileCreationCount(options) {
+    await this.ensureAccountReady();
+    return this.profileCapacity.read(options);
+  }
+
   async createProfile(name) {
     await this.ensureAccountReady();
-    return createProfile(this.cdp, name);
+    return createProfile(
+      this.cdp,
+      name,
+      () => this.profileCapacity.read(),
+    );
   }
 
   async deleteProfile(profileId) {
@@ -138,7 +157,12 @@ class OneBrowser {
   async ensureProfiles(options) {
     await this.ensureAccountReady();
     const response = await this.cdp.send('Browser.getProfiles');
-    return ensureProfiles(this.cdp, response?.profiles, options);
+    return ensureProfiles(
+      this.cdp,
+      response?.profiles,
+      options,
+      () => this.profileCapacity.read(),
+    );
   }
 
   async openProfilePage(profileId, {timeoutMs} = {}) {

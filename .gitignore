@@ -1,3 +1,5 @@
 .env
+.env.integration
+.sentry-native/
 examples/node/.env
 node_modules/

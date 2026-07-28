@@ -21,6 +21,7 @@
   "scripts": {
     "check": "node --check src/index.js && node --check src/client.js && node --check src/config.js && node --check src/errors.js && node --check src/auth.js && node --check src/profiles.js && node --check src/targets.js && node --check src/concurrency.js && node --check src/results.js",
     "test": "node --test",
+    "test:integration:profile-crud": "node --env-file=.env.integration --test test/integration/profile-crud.test.js",
     "pack:check": "npm pack --dry-run"
   },
   "engines": {

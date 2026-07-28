@@ -7,6 +7,9 @@ const {
 } = require('./errors');
 const {serializeError} = require('./results');
 
+const wait = (milliseconds) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
 function validateProfileId(profileId) {
   if (typeof profileId !== 'string' || profileId.trim() === '') {
     throw new ProfileError('A non-empty ProfileInfo.id is required.');
@@ -74,6 +77,94 @@ async function availableCount(cdp) {
   return response.count;
 }
 
+function positiveNumber(value, fallback, name) {
+  const resolved = value === undefined ? fallback : value;
+  if (!Number.isFinite(resolved) || resolved <= 0) {
+    throw new ProfileError(`${name} must be a positive number.`);
+  }
+  return resolved;
+}
+
+function createProfileCapacityReader(cdp) {
+  let policySettled = false;
+  let waitPromise;
+  let generation = 0;
+
+  async function pollForPolicy({timeoutMs, pollIntervalMs}) {
+    const deadline = Date.now() + timeoutMs;
+    let count = 0;
+
+    do {
+      await wait(
+        Math.min(pollIntervalMs, Math.max(1, deadline - Date.now())),
+      );
+      count = await availableCount(cdp);
+      if (count > 0) {
+        return count;
+      }
+    } while (Date.now() < deadline);
+
+    return count;
+  }
+
+  async function read({
+    waitForPolicy = true,
+    timeoutMs,
+    pollIntervalMs,
+  } = {}) {
+    if (typeof waitForPolicy !== 'boolean') {
+      throw new ProfileError('waitForPolicy must be a boolean.');
+    }
+    const resolvedTimeoutMs = positiveNumber(
+      timeoutMs,
+      15_000,
+      'timeoutMs',
+    );
+    const resolvedPollIntervalMs = positiveNumber(
+      pollIntervalMs,
+      250,
+      'pollIntervalMs',
+    );
+
+    const count = await availableCount(cdp);
+    if (count > 0) {
+      policySettled = true;
+      return count;
+    }
+    if (!waitForPolicy || policySettled) {
+      return count;
+    }
+    if (!waitPromise) {
+      const waitGeneration = generation;
+      const pending = pollForPolicy({
+        timeoutMs: resolvedTimeoutMs,
+        pollIntervalMs: resolvedPollIntervalMs,
+      })
+        .then((settledCount) => {
+          if (generation === waitGeneration) {
+            policySettled = true;
+          }
+          return settledCount;
+        })
+        .finally(() => {
+          if (waitPromise === pending) {
+            waitPromise = undefined;
+          }
+        });
+      waitPromise = pending;
+    }
+    return waitPromise;
+  }
+
+  function reset() {
+    generation += 1;
+    policySettled = false;
+    waitPromise = undefined;
+  }
+
+  return {read, reset};
+}
+
 async function createNamedProfile(cdp, name) {
   const response = await cdp.send('Browser.createProfile', {name});
   if (
@@ -88,9 +179,13 @@ async function createNamedProfile(cdp, name) {
   return response.profile;
 }
 
-async function createProfile(cdp, name) {
+async function createProfile(
+  cdp,
+  name,
+  getAvailableCount = () => availableCount(cdp),
+) {
   const validatedName = validateProfileName(name);
-  const available = await availableCount(cdp);
+  const available = await getAvailableCount();
   if (available < 1) {
     throw new ProfileLimitError(
       'No persistent profiles can be created for the current account.',
@@ -148,7 +243,12 @@ async function deleteProfiles(cdp, profileIds) {
   return results;
 }
 
-async function ensureProfiles(cdp, profiles, options) {
+async function ensureProfiles(
+  cdp,
+  profiles,
+  options,
+  getAvailableCount = () => availableCount(cdp),
+) {
   const {count, namePrefix, mode} = validateEnsureOptions(options);
   const current = persistentProfiles(profiles);
 
@@ -158,7 +258,7 @@ async function ensureProfiles(cdp, profiles, options) {
       .filter(Number.isInteger);
     const start = usedIndices.length === 0 ? 1 : Math.max(...usedIndices) + 1;
     const names = indexedNames(namePrefix, count, start);
-    const available = await availableCount(cdp);
+    const available = await getAvailableCount();
     if (available < count) {
       throw new ProfileLimitError(
         `Cannot create ${count} profiles: 0 reused, ${count} missing, and ${available} creation slots available.`,
@@ -193,7 +293,7 @@ async function ensureProfiles(cdp, profiles, options) {
   }
 
   if (missingNames.length > 0) {
-    const available = await availableCount(cdp);
+    const available = await getAvailableCount();
     if (available < missingNames.length) {
       throw new ProfileLimitError(
         `Cannot ensure ${count} profiles: ${reused.length} existing, ${missingNames.length} missing, and ${available} creation slots available.`,
@@ -215,7 +315,9 @@ async function ensureProfiles(cdp, profiles, options) {
 }
 
 module.exports = {
+  availableCount,
   createProfile,
+  createProfileCapacityReader,
   deleteProfile,
   deleteProfiles,
   ensureProfiles,

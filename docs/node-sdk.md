@@ -137,6 +137,21 @@ anything. The underlying CDP API is not transactional, so an unexpected
 browser or transport failure during a multi-profile creation sequence can
 still leave profiles that were created before that failure.
 
+After authentication, 1Browser may refresh account policy asynchronously and
+briefly report zero available profile slots. The SDK waits once per client for
+that policy refresh before treating zero as the real limit. The public
+`getAvailableProfileCreationCount()` method uses the same bounded wait:
+
+```js
+const available = await client.getAvailableProfileCreationCount({
+  timeoutMs: 15_000,
+  pollIntervalMs: 250,
+});
+```
+
+Set `waitForPolicy: false` to perform a single immediate CDP read. Once the SDK
+has observed a settled capacity, later zero values are returned immediately.
+
 ## Deleting profiles
 
 Deletion is always explicit. `ensureProfiles()` never deletes profiles when a
@@ -245,6 +260,7 @@ unchanged. Prefer the typed high-level methods when one exists.
 - `ensureAuthenticated(options?)`
 - `getProfiles()`
 - `getPersistentProfiles(options?)`
+- `getAvailableProfileCreationCount(options?)`
 - `createProfile(name)`
 - `deleteProfile(profileId)`
 - `deleteProfiles(profileIds)`
@@ -267,6 +283,7 @@ The SDK maps directly to the documented methods:
 | --- | --- |
 | `ensureAuthenticated` | `getAuthState`, `signin` |
 | `getProfiles` | `getProfiles` |
+| `getAvailableProfileCreationCount` | `getAvailableProfileCreationCount` |
 | `createProfile` | `getAvailableProfileCreationCount`, `createProfile` |
 | `deleteProfile`, `deleteProfiles` | `deleteProfileById` |
 | `ensureProfiles` | `getProfiles`, `getAvailableProfileCreationCount`, `createProfile` |

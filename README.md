@@ -71,6 +71,10 @@ Profile deletion is explicit through `deleteProfile(profileId)` or
 `deleteProfiles(profileIds)`. The SDK never deletes extra profiles
 automatically.
 
+Profile creation methods handle the short account-policy refresh window after
+authentication by waiting once for `getAvailableProfileCreationCount()` to
+settle before treating a zero count as the real account limit.
+
 ## Examples
 
 The examples consume the local SDK package:
@@ -113,6 +117,33 @@ Continue with the focused examples in [`examples/node`](examples/node):
 - ensure and search from multiple deterministic profiles with bounded
   concurrency;
 - explicitly log out.
+
+## Profile CRUD integration test
+
+The profile CRUD test uses a real browser and account. It creates uniquely
+named profiles, verifies them by the returned `ProfileInfo.id`, deletes only
+those exact IDs, and waits until they disappear from `Browser.getProfiles`.
+It never selects deletion targets by name or list position.
+
+Prepare the ignored local configuration:
+
+```bash
+cp .env.integration.example .env.integration
+```
+
+Set `ONE_BROWSER_PATH`, a dedicated persistent `ONE_USER_DATA_DIR`, and test
+account credentials when the saved session is not already authenticated. Both
+`ONE_BROWSER_INTEGRATION=1` and `ONE_BROWSER_PROFILE_CRUD=1` are required, so
+ordinary `npm test` runs remain non-destructive.
+
+The test waits up to `ONE_PROFILE_CRUD_QUOTA_TIMEOUT_MS` for the browser's
+asynchronous account policy refresh before checking profile creation capacity.
+
+Run only the CRUD integration test:
+
+```bash
+npm run test:integration:profile-crud
+```
 
 ## Documentation
 

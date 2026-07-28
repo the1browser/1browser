@@ -101,6 +101,11 @@ export class OneBrowser {
   getPersistentProfiles(options?: {
     includeOmitted?: boolean;
   }): Promise<ProfileInfo[]>;
+  getAvailableProfileCreationCount(options?: {
+    waitForPolicy?: boolean;
+    timeoutMs?: number;
+    pollIntervalMs?: number;
+  }): Promise<number>;
   createProfile(name: string): Promise<ProfileInfo>;
   deleteProfile(profileId: string): Promise<ProfileDeletionResult>;
   deleteProfiles(profileIds: string[]): Promise<ProfileDeletionResult[]>;

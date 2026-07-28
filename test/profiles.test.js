@@ -5,6 +5,7 @@ const test = require('node:test');
 
 const {
   createProfile,
+  createProfileCapacityReader,
   deleteProfile,
   deleteProfiles,
   ensureProfiles,
@@ -48,6 +49,97 @@ test('can include omitted persistent profiles explicitly', () => {
     {includeOmitted: true},
   );
   assert.deepEqual(result.map(({id}) => id), ['active', 'omitted']);
+});
+
+test('waits for an asynchronously refreshed profile policy after an initial zero', async () => {
+  const counts = [0, 0, 3];
+  const {calls, cdp} = session(() => ({count: counts.shift()}));
+  const capacity = createProfileCapacityReader(cdp);
+
+  const count = await capacity.read({
+    timeoutMs: 50,
+    pollIntervalMs: 1,
+  });
+
+  assert.equal(count, 3);
+  assert.equal(calls.length, 3);
+});
+
+test('shares one policy wait between concurrent capacity reads', async () => {
+  const counts = [0, 0, 4];
+  const {calls, cdp} = session(() => ({count: counts.shift()}));
+  const capacity = createProfileCapacityReader(cdp);
+
+  const result = await Promise.all([
+    capacity.read({timeoutMs: 50, pollIntervalMs: 1}),
+    capacity.read({timeoutMs: 50, pollIntervalMs: 1}),
+  ]);
+
+  assert.deepEqual(result, [4, 4]);
+  assert.equal(calls.length, 3);
+});
+
+test('does not wait again after profile policy capacity has settled', async () => {
+  const counts = [2, 0];
+  const {calls, cdp} = session(() => ({count: counts.shift()}));
+  const capacity = createProfileCapacityReader(cdp);
+
+  assert.equal(await capacity.read(), 2);
+  assert.equal(
+    await capacity.read({timeoutMs: 50, pollIntervalMs: 1}),
+    0,
+  );
+  assert.equal(calls.length, 2);
+});
+
+test('createProfile uses the shared capacity reader for a transient zero', async () => {
+  const counts = [0, 1];
+  const {calls, cdp} = session((method, params) => {
+    if (method === 'Browser.getAvailableProfileCreationCount') {
+      return {count: counts.shift()};
+    }
+    return {profile: {id: 'created-id', name: params.name}};
+  });
+  const capacity = createProfileCapacityReader(cdp);
+
+  const profile = await createProfile(
+    cdp,
+    'Transient Policy',
+    () => capacity.read({timeoutMs: 50, pollIntervalMs: 1}),
+  );
+
+  assert.equal(profile.id, 'created-id');
+  assert.deepEqual(calls.map(({method}) => method), [
+    'Browser.getAvailableProfileCreationCount',
+    'Browser.getAvailableProfileCreationCount',
+    'Browser.createProfile',
+  ]);
+});
+
+test('ensureProfiles preflights the full request after policy refresh', async () => {
+  const counts = [0, 2];
+  const {calls, cdp} = session((method, params) => {
+    if (method === 'Browser.getAvailableProfileCreationCount') {
+      return {count: counts.shift()};
+    }
+    return {profile: {id: params.name, name: params.name}};
+  });
+  const capacity = createProfileCapacityReader(cdp);
+
+  const result = await ensureProfiles(
+    cdp,
+    [],
+    {count: 2, namePrefix: 'Policy Refresh'},
+    () => capacity.read({timeoutMs: 50, pollIntervalMs: 1}),
+  );
+
+  assert.equal(result.created.length, 2);
+  assert.deepEqual(calls.map(({method}) => method), [
+    'Browser.getAvailableProfileCreationCount',
+    'Browser.getAvailableProfileCreationCount',
+    'Browser.createProfile',
+    'Browser.createProfile',
+  ]);
 });
 
 test('ensure-count reuses deterministic names in index order', async () => {
