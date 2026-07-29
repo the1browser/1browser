@@ -23,6 +23,11 @@ npm run open-profile
 npm run configure-proxy
 npm run multi-profile-search
 npm run logout
+npm run signup
+npm run web-login
+npm run verify-email
+npm run fingerprint-settings
+npm run proxy-actions
 ```
 
 Only `npm run logout` calls `Browser.logout`. Every other example closes the
@@ -37,6 +42,21 @@ persistent profile returned by `Browser.getProfiles`.
 markup varies, so the site adapter uses selector fallbacks and explicit
 verification. It reports CAPTCHA or manual-verification pages clearly and
 does not attempt to bypass them.
+
+The new account and settings examples cover every typed auth, fingerprint,
+and proxy wrapper:
+
+- `signup` creates a new account only with `ONE_ALLOW_SIGNUP=1` and the
+  separate `ONE_SIGNUP_EMAIL` / `ONE_SIGNUP_PASSWORD` credentials.
+- `web-login` opens the interactive 1Browser login page and waits for Enter
+  before checking the online auth state.
+- `verify-email` sends a verification email only with `ONE_ALLOW_VERIFY=1`.
+- `fingerprint-settings` reads one and all settings. It writes only when
+  `ONE_FINGERPRINT_VALUE` is non-empty and regenerates only when
+  `ONE_GENERATE_FINGERPRINT=1`.
+- `proxy-actions` reads the current proxy, optionally applies
+  `ONE_PROXY_TYPE`, starts a connection check, and requests a new paid catalog
+  proxy only with `ONE_REQUEST_NEW_PROXY=1`.
 
 The first run may sign in with `ONE_EMAIL` and `ONE_PASSWORD`. Repeated runs
 reuse the same `ONE_USER_DATA_DIR` and deterministic profile names. Only

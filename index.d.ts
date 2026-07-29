@@ -26,6 +26,26 @@ export interface AuthState {
   reason?: string;
 }
 
+export interface AuthResponse {
+  success: boolean;
+  responseCode: number;
+  body?: string;
+}
+
+export interface BrowserWindowTarget {
+  windowId: number;
+  targetId: string;
+}
+
+export interface FingerprintSetting {
+  value?: unknown;
+  options?: Array<{name: string; value: unknown}>;
+  [key: string]: unknown;
+}
+
+export type FingerprintSettings = Record<string, FingerprintSetting>;
+export type ProxySettings = Record<string, unknown>;
+
 export interface ProfileInfo {
   id: string;
   name?: string;
@@ -83,6 +103,8 @@ export class ProfileLimitError extends ProfileError {}
 export class ProfileTargetError extends ProfileError {}
 export class ProfileDeletionError extends ProfileError {}
 export class ProfileTaskError extends OneBrowserError {}
+export class FingerprintError extends OneBrowserError {}
+export class ProxyError extends OneBrowserError {}
 export class ClientClosedError extends OneBrowserError {}
 
 export class OneBrowser {
@@ -95,6 +117,12 @@ export class OneBrowser {
     timeoutMs?: number;
     pollIntervalMs?: number;
   }): Promise<AuthState>;
+  signup(options: {
+    email: string;
+    password: string;
+  }): Promise<AuthResponse>;
+  login(): Promise<BrowserWindowTarget>;
+  verify(): Promise<AuthResponse>;
   logout(): Promise<void>;
 
   getProfiles(): Promise<ProfileInfo[]>;
@@ -106,6 +134,39 @@ export class OneBrowser {
     timeoutMs?: number;
     pollIntervalMs?: number;
   }): Promise<number>;
+  getFingerprintSetting(options: {
+    profileId?: string;
+    name: string;
+  }): Promise<FingerprintSetting>;
+  getFingerprintSettings(options?: {
+    profileId?: string;
+  }): Promise<FingerprintSettings>;
+  setFingerprintSetting(options: {
+    profileId?: string;
+    name: string;
+    value: unknown;
+  }): Promise<FingerprintSetting>;
+  generateFingerprint(options?: {
+    profileId?: string;
+  }): Promise<boolean>;
+  getProxySettings(options?: {
+    profileId?: string;
+  }): Promise<ProxySettings>;
+  setProxySettings(options: {
+    profileId?: string;
+    type: string;
+    settings: ProxySettings;
+  }): Promise<ProxySettings>;
+  setProxyType(options: {
+    profileId?: string;
+    type: string;
+  }): Promise<ProxySettings>;
+  checkProxyConnection(options?: {
+    profileId?: string;
+  }): Promise<boolean>;
+  requestNewProxy(options?: {
+    profileId?: string;
+  }): Promise<boolean>;
   createProfile(name: string): Promise<ProfileInfo>;
   deleteProfile(profileId: string): Promise<ProfileDeletionResult>;
   deleteProfiles(profileIds: string[]): Promise<ProfileDeletionResult[]>;

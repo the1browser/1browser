@@ -2,6 +2,11 @@
 
 const puppeteer = require('puppeteer-core');
 
+const {
+  login: openLogin,
+  signup: signupAccount,
+  verify: verifyAccount,
+} = require('./auth-operations');
 const {ensureAuthenticated, getAuthState} = require('./auth');
 const {validateLaunchOptions} = require('./config');
 const {runForProfiles} = require('./concurrency');
@@ -21,6 +26,19 @@ const {
   persistentProfiles,
   validateProfileId,
 } = require('./profiles');
+const {
+  generateFingerprint,
+  getFingerprintSetting,
+  getFingerprintSettings,
+  setFingerprintSetting,
+} = require('./fingerprint');
+const {
+  checkProxyConnection,
+  getProxySettings,
+  requestNewProxy,
+  setProxySettings,
+  setProxyType,
+} = require('./proxy');
 const {openProfilePage} = require('./targets');
 
 class OneBrowser {
@@ -94,6 +112,26 @@ class OneBrowser {
     return state;
   }
 
+  async signup(options) {
+    this.assertOpen();
+    const response = await signupAccount(this.cdp, options);
+    if (response.success) {
+      this.authenticated = false;
+      this.profileCapacity.reset();
+    }
+    return response;
+  }
+
+  async login() {
+    this.assertOpen();
+    return openLogin(this.cdp);
+  }
+
+  async verify() {
+    await this.ensureAccountReady();
+    return verifyAccount(this.cdp);
+  }
+
   async ensureAccountReady() {
     this.assertOpen();
     if (!this.authenticated) {
@@ -128,6 +166,51 @@ class OneBrowser {
 
   async getPersistentProfiles(options) {
     return persistentProfiles(await this.getProfiles(), options);
+  }
+
+  async getFingerprintSetting(options) {
+    await this.ensureAccountReady();
+    return getFingerprintSetting(this.cdp, options);
+  }
+
+  async getFingerprintSettings(options) {
+    await this.ensureAccountReady();
+    return getFingerprintSettings(this.cdp, options);
+  }
+
+  async setFingerprintSetting(options) {
+    await this.ensureAccountReady();
+    return setFingerprintSetting(this.cdp, options);
+  }
+
+  async generateFingerprint(options) {
+    await this.ensureAccountReady();
+    return generateFingerprint(this.cdp, options);
+  }
+
+  async getProxySettings(options) {
+    await this.ensureAccountReady();
+    return getProxySettings(this.cdp, options);
+  }
+
+  async setProxySettings(options) {
+    await this.ensureAccountReady();
+    return setProxySettings(this.cdp, options);
+  }
+
+  async setProxyType(options) {
+    await this.ensureAccountReady();
+    return setProxyType(this.cdp, options);
+  }
+
+  async checkProxyConnection(options) {
+    await this.ensureAccountReady();
+    return checkProxyConnection(this.cdp, options);
+  }
+
+  async requestNewProxy(options) {
+    await this.ensureAccountReady();
+    return requestNewProxy(this.cdp, options);
   }
 
   async getAvailableProfileCreationCount(options) {

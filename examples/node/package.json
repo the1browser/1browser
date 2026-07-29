@@ -11,7 +11,12 @@
     "configure-proxy": "node src/05-configure-proxy.js",
     "logout": "node src/06-explicit-logout.js",
     "multi-profile-search": "node src/07-multi-profile-search.js",
-    "check": "node --check src/config.js && node --check src/01-auth-and-reuse-session.js && node --check src/02-list-profiles.js && node --check src/03-create-profile.js && node --check src/04-open-profile.js && node --check src/05-configure-proxy.js && node --check src/06-explicit-logout.js && node --check src/07-multi-profile-search.js && node --check src/sites/amazon-search.js",
+    "signup": "node src/08-signup.js",
+    "web-login": "node src/09-web-login.js",
+    "verify-email": "node src/10-verify-email.js",
+    "fingerprint-settings": "node src/11-fingerprint-settings.js",
+    "proxy-actions": "node src/12-proxy-actions.js",
+    "check": "node --check src/config.js && node --check src/01-auth-and-reuse-session.js && node --check src/02-list-profiles.js && node --check src/03-create-profile.js && node --check src/04-open-profile.js && node --check src/05-configure-proxy.js && node --check src/06-explicit-logout.js && node --check src/07-multi-profile-search.js && node --check src/08-signup.js && node --check src/09-web-login.js && node --check src/10-verify-email.js && node --check src/11-fingerprint-settings.js && node --check src/12-proxy-actions.js && node --check src/sites/amazon-search.js",
     "test": "node --test"
   },
   "engines": {

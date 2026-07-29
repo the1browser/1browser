@@ -75,6 +75,11 @@ Profile creation methods handle the short account-policy refresh window after
 authentication by waiting once for `getAvailableProfileCreationCount()` to
 settle before treating a zero count as the real account limit.
 
+The SDK also provides typed wrappers for signup, web login, email verification,
+fingerprint settings, fingerprint generation, proxy settings, proxy health
+checks, and requesting a new catalog proxy. The raw `send()` method remains an
+escape hatch for future documented CDP additions.
+
 ## Examples
 
 The examples consume the local SDK package:
@@ -118,12 +123,13 @@ Continue with the focused examples in [`examples/node`](examples/node):
   concurrency;
 - explicitly log out.
 
-## Profile CRUD integration test
+## Real-browser integration tests
 
-The profile CRUD test uses a real browser and account. It creates uniquely
-named profiles, verifies them by the returned `ProfileInfo.id`, deletes only
-those exact IDs, and waits until they disappear from `Browser.getProfiles`.
-It never selects deletion targets by name or list position.
+The integration suite uses a native installed browser and a dedicated test
+account. Tests are organized into account, profile, fingerprint, and proxy
+groups. The cross-platform runner can execute one file, one group, or the
+entire suite, always serially to protect the shared persistent user-data
+directory.
 
 Prepare the ignored local configuration:
 
@@ -131,19 +137,27 @@ Prepare the ignored local configuration:
 cp .env.integration.example .env.integration
 ```
 
-Set `ONE_BROWSER_PATH`, a dedicated persistent `ONE_USER_DATA_DIR`, and test
-account credentials when the saved session is not already authenticated. Both
-`ONE_BROWSER_INTEGRATION=1` and `ONE_BROWSER_PROFILE_CRUD=1` are required, so
-ordinary `npm test` runs remain non-destructive.
+Set `ONE_BROWSER_PATH`, a dedicated persistent `ONE_USER_DATA_DIR`, test
+account credentials when the saved session is not already authenticated, and
+`ONE_BROWSER_INTEGRATION=1`. Mutating or external actions have additional
+explicit opt-in flags, so ordinary `npm test` runs remain non-destructive.
 
-The test waits up to `ONE_PROFILE_CRUD_QUOTA_TIMEOUT_MS` for the browser's
-asynchronous account policy refresh before checking profile creation capacity.
+Run one test, one group, or all groups:
 
-Run only the CRUD integration test:
+```bash
+npm run test:integration:file -- account/login.test.js
+npm run test:integration:fingerprint
+npm run test:integration
+```
+
+The profile CRUD compatibility alias remains available:
 
 ```bash
 npm run test:integration:profile-crud
 ```
+
+See [Real-browser integration tests](docs/integration-tests.md) for every
+group, risk flag, native OS requirement, and macOS/Linux/Windows setup.
 
 ## Documentation
 
@@ -152,6 +166,7 @@ npm run test:integration:profile-crud
 - [User data directory](docs/user-data-directory.md)
 - [CDP method reference](docs/cdp-api.md)
 - [Node.js SDK](docs/node-sdk.md)
+- [Real-browser integration tests](docs/integration-tests.md)
 - [HTTP API](docs/api/index.md)
 - [Instructions for AI agents](AGENTS.md)
 

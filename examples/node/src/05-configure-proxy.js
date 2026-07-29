@@ -15,11 +15,10 @@ async function main() {
     if (!config.proxyUrl) {
       throw new Error('Set ONE_PROXY_URL before configuring a user proxy.');
     }
-    const {settings: current} = await client.send(
-      'Browser.getProxySettings',
-      {profileId: profile.id},
-    );
-    const {settings} = await client.send('Browser.setProxySettings', {
+    const current = await client.getProxySettings({
+      profileId: profile.id,
+    });
+    const settings = await client.setProxySettings({
       profileId: profile.id,
       type: 'User proxy',
       settings: {

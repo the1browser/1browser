@@ -62,6 +62,18 @@ class ProfileTaskError extends OneBrowserError {
   }
 }
 
+class FingerprintError extends OneBrowserError {
+  constructor(message, options = {}) {
+    super(message, {code: 'ERR_ONE_BROWSER_FINGERPRINT', ...options});
+  }
+}
+
+class ProxyError extends OneBrowserError {
+  constructor(message, options = {}) {
+    super(message, {code: 'ERR_ONE_BROWSER_PROXY', ...options});
+  }
+}
+
 class ClientClosedError extends OneBrowserError {
   constructor(message = 'The 1Browser client is closed.', options = {}) {
     super(message, {code: 'ERR_ONE_BROWSER_CLOSED', ...options});
@@ -79,5 +91,7 @@ module.exports = {
   ProfileTargetError,
   ProfileDeletionError,
   ProfileTaskError,
+  FingerprintError,
+  ProxyError,
   ClientClosedError,
 };

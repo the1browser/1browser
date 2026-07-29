@@ -6,7 +6,7 @@ const test = require('node:test');
 const {
   OneBrowser,
   loadEnvironmentConfig,
-} = require('../../src');
+} = require('../../../src');
 
 const enabled =
   process.env.ONE_BROWSER_INTEGRATION === '1' &&

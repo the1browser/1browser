@@ -112,6 +112,35 @@ Tokens stay inside 1Browser and are never exposed by this SDK.
 Account-dependent SDK methods automatically establish authentication if the
 caller has not already called `ensureAuthenticated()`.
 
+### Signup, web login, and email verification
+
+`signup()` maps directly to `Browser.signup` and is intentionally available
+before authentication:
+
+```js
+const signupCredentials = {
+  email: process.env.ONE_EMAIL,
+  password: process.env.ONE_PASSWORD,
+};
+
+const response = await client.signup(signupCredentials);
+if (!response.success) {
+  console.error(response.responseCode, response.body);
+} else {
+  await client.ensureAuthenticated(signupCredentials);
+}
+```
+
+Backend business failures are returned as `AuthResponse` rather than thrown.
+Credentials are never included in errors. A successful signup starts the
+browser's signin flow; explicitly call `ensureAuthenticated()` with the same
+credentials to wait for a confirmed online session before continuing.
+
+`login()` opens the 1Browser web login page and returns `{windowId, targetId}`.
+It does not accept credentials and does not require an existing authenticated
+session. `verify()` requires authentication and returns the backend
+`AuthResponse` from `Browser.verify`.
+
 ## Profiles and ownership
 
 `getPersistentProfiles()` excludes profiles with `omitted === true` or
@@ -211,6 +240,71 @@ profiles receive explicit failed results.
 The runner closes only the `Page` it opened for each task. It does not close
 the global browser or log out after an individual task.
 
+## Fingerprint settings
+
+Fingerprint methods accept an optional `profileId`. When omitted, 1Browser
+uses its default loaded profile:
+
+```js
+const setting = await client.getFingerprintSetting({
+  profileId: profile.id,
+  name: 'screen_resolution',
+});
+
+const effective = await client.setFingerprintSetting({
+  profileId: profile.id,
+  name: 'screen_resolution',
+  value: '1024x768',
+});
+
+const settings = await client.getFingerprintSettings({
+  profileId: profile.id,
+});
+
+const started = await client.generateFingerprint({
+  profileId: profile.id,
+});
+```
+
+Setting values are passed through without inventing SDK-specific enums. Use
+the names and value types documented by the current 1Browser CDP API.
+
+## Proxy settings
+
+Proxy wrappers preserve the settings WebUI object returned by 1Browser:
+
+```js
+const current = await client.getProxySettings({profileId: profile.id});
+
+const settings = await client.setProxySettings({
+  profileId: profile.id,
+  type: 'User proxy',
+  settings: {
+    user: 'http://user:password@host:8080',
+    free: current.free ?? '',
+    tor: current.tor ?? '',
+    datacenter: current.datacenter ?? '',
+    mobile: current.mobile ?? '',
+    resident: current.resident ?? '',
+  },
+});
+
+await client.setProxyType({
+  profileId: profile.id,
+  type: 'No proxy',
+});
+
+const checkStarted = await client.checkProxyConnection({
+  profileId: profile.id,
+});
+const requestStarted = await client.requestNewProxy({
+  profileId: profile.id,
+});
+```
+
+Proxy URLs may contain credentials. Do not print settings objects or commit
+them to source control.
+
 ## Errors
 
 The public error hierarchy is:
@@ -225,6 +319,8 @@ The public error hierarchy is:
 - `ProfileTargetError`
 - `ProfileDeletionError`
 - `ProfileTaskError`
+- `FingerprintError`
+- `ProxyError`
 - `ClientClosedError`
 
 Every SDK error has a stable `code`. Error messages contain actionable counts
@@ -248,19 +344,32 @@ applications should only call `close()`.
 
 ## Low-level CDP escape hatch
 
-Use `client.send(method, params)` when the documented 1Browser operation is not
-yet wrapped by the SDK, such as proxy or fingerprint configuration. It ensures
-the client is authenticated but otherwise passes the command through
-unchanged. Prefer the typed high-level methods when one exists.
+Use `client.send(method, params)` only when a documented 1Browser operation is
+not yet wrapped by the SDK. It ensures the client is authenticated but
+otherwise passes the command through unchanged. Prefer the typed high-level
+methods when one exists. Pre-authentication operations such as signup and web
+login must use their dedicated wrappers.
 
 ## API reference
 
 - `OneBrowser.launch(options)`
 - `getAuthState(options?)`
 - `ensureAuthenticated(options?)`
+- `signup(options)`
+- `login()`
+- `verify()`
 - `getProfiles()`
 - `getPersistentProfiles(options?)`
 - `getAvailableProfileCreationCount(options?)`
+- `getFingerprintSetting(options)`
+- `getFingerprintSettings(options?)`
+- `setFingerprintSetting(options)`
+- `generateFingerprint(options?)`
+- `getProxySettings(options?)`
+- `setProxySettings(options)`
+- `setProxyType(options)`
+- `checkProxyConnection(options?)`
+- `requestNewProxy(options?)`
 - `createProfile(name)`
 - `deleteProfile(profileId)`
 - `deleteProfiles(profileIds)`
@@ -282,8 +391,13 @@ The SDK maps directly to the documented methods:
 | SDK method | Browser CDP methods |
 | --- | --- |
 | `ensureAuthenticated` | `getAuthState`, `signin` |
+| `signup` | `signup` |
+| `login` | `login` |
+| `verify` | `verify` |
 | `getProfiles` | `getProfiles` |
 | `getAvailableProfileCreationCount` | `getAvailableProfileCreationCount` |
+| Fingerprint wrappers | `getFingerprintSetting`, `getFingerprintSettings`, `setFingerprintSetting`, `generateFingerprint` |
+| Proxy wrappers | `getProxySettings`, `setProxySettings`, `setProxyType`, `checkProxyConnection`, `requestNewProxy` |
 | `createProfile` | `getAvailableProfileCreationCount`, `createProfile` |
 | `deleteProfile`, `deleteProfiles` | `deleteProfileById` |
 | `ensureProfiles` | `getProfiles`, `getAvailableProfileCreationCount`, `createProfile` |

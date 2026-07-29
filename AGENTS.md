@@ -149,6 +149,10 @@ Use raw `Browser.*` CDP methods only when:
 - the task explicitly requests low-level CDP usage;
 - the SDK implementation itself is being modified.
 
+The SDK exposes dedicated methods for authentication, profiles, fingerprints,
+and proxies. Prefer `signup`, `login`, `verify`, fingerprint methods, and proxy
+methods over sending their corresponding `Browser.*` commands manually.
+
 For short natural-language requests:
 
 1. translate the request into application parameters;
