@@ -201,6 +201,8 @@ export class OneBrowser {
   runForProfiles<T>(options: {
     profiles: ProfileInfo[];
     concurrency?: number;
+    openingConcurrency?: number;
+    openTimeoutMs?: number;
     stopOnError?: boolean;
     task: (context: {
       profile: ProfileInfo;

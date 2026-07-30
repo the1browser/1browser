@@ -76,6 +76,8 @@ try {
   const results = await client.runForProfiles({
     profiles,
     concurrency: 2,
+    openingConcurrency: 2,
+    openTimeoutMs: 30_000,
     task: async ({page}) => {
       await page.goto('https://example.com', {
         waitUntil: 'domcontentloaded',

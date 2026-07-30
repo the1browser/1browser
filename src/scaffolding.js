@@ -74,6 +74,8 @@ async function main() {
     const results = await client.runForProfiles({
       profiles,
       concurrency: task.concurrency,
+      openingConcurrency: task.openingConcurrency,
+      openTimeoutMs: task.openTimeoutMs,
       task: task.run,
     });
     console.table(results);
@@ -96,6 +98,8 @@ module.exports = {
   profileCount: 1,
   profileNamePrefix: ${JSON.stringify(applicationId)},
   concurrency: 1,
+  openingConcurrency: 2,
+  openTimeoutMs: 30_000,
 
   async run({page, profile}) {
     // Replace this placeholder with the requested website automation.

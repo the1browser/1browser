@@ -27,6 +27,11 @@ async function applicationConfig() {
     targetUrl: parsedUrl.href,
     query: process.env.ONE_SEARCH_QUERY?.trim() || 'iphone',
     concurrency: positiveInteger('ONE_CONCURRENCY', 2),
+    openingConcurrency: positiveInteger('ONE_OPENING_CONCURRENCY', 2),
+    openTimeoutMs: positiveInteger(
+      'ONE_PROFILE_OPEN_TIMEOUT_MS',
+      30_000,
+    ),
   };
 }
 
@@ -46,6 +51,8 @@ async function main() {
     const results = await client.runForProfiles({
       profiles: ensured.profiles,
       concurrency: config.concurrency,
+      openingConcurrency: config.openingConcurrency,
+      openTimeoutMs: config.openTimeoutMs,
       task: async ({page}) =>
         searchAmazon(page, {
           targetUrl: config.targetUrl,

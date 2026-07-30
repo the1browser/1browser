@@ -66,6 +66,11 @@ markup varies, so the site adapter uses selector fallbacks and explicit
 verification. It reports CAPTCHA or manual-verification pages clearly and
 does not attempt to bypass them.
 
+`ONE_CONCURRENCY` controls active profile tasks,
+`ONE_OPENING_CONCURRENCY` separately limits simultaneous window starts, and
+`ONE_PROFILE_OPEN_TIMEOUT_MS` controls target resolution after an opening slot
+is acquired.
+
 The new account and settings examples cover every typed auth, fingerprint,
 and proxy wrapper:
 
