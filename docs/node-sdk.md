@@ -59,7 +59,14 @@ const configuration = await resolveConfiguration({
 const client = await OneBrowser.launch(configuration);
 
 try {
-  await client.ensureAuthenticated();
+  await client.ensureAuthenticated({
+    onInteractiveLogin() {
+      console.log(
+        'Complete sign-in in the opened 1Browser window. ' +
+        'Automation will continue automatically after authentication.',
+      );
+    },
+  });
 
   const {profiles} = await client.ensureProfiles({
     count: 5,
@@ -125,6 +132,20 @@ options, `ONE_EMAIL` / `ONE_PASSWORD`, or ignored
 }
 ```
 
+Credentials are optional for local interactive use. Without a valid persisted
+session or complete credential pair, the default `auto` mode opens the native
+login UI and waits. Unattended jobs should select `credentials-only`:
+
+```js
+const config = await resolveConfiguration({
+  applicationId: 'scheduled-task',
+  options: {
+    auth: {mode: 'credentials-only'},
+  },
+  env: process.env,
+});
+```
+
 Known native installation paths are kept in `src/platform-paths.js`:
 
 - macOS first queries Spotlight for bundle ID `com.browser.1browser`, then
@@ -170,8 +191,8 @@ ONE_PASSWORD=secret
 This compatibility helper requires both the executable and user-data
 directory. New generated applications should use `resolveConfiguration()`.
 The SDK rejects temporary user-data directories and creates a missing
-persistent directory. Credentials are optional until the persisted session is
-unavailable.
+persistent directory. Credentials are optional; `auto` uses interactive login
+when the persisted session is unavailable.
 
 Configuration can also be supplied directly:
 
@@ -182,6 +203,12 @@ const client = await OneBrowser.launch({
   credentials: {
     email: process.env.ONE_EMAIL,
     password: process.env.ONE_PASSWORD,
+  },
+  auth: {
+    mode: 'auto',
+    timeoutMs: 15_000,
+    interactiveTimeoutMs: 300_000,
+    pollIntervalMs: 500,
   },
   launchArgs: ['--disable-sync'],
 });
@@ -206,14 +233,48 @@ close it without logging out.
 ## Authentication and session reuse
 
 `ensureAuthenticated()` always begins with
-`Browser.getAuthState({validateOnline: true})`. If the persistent session is
-valid, it returns without using credentials. Otherwise it calls
-`Browser.signin`, validates `AuthResponse.success`, and polls the online state
-for a bounded period.
+`Browser.getAuthState({validateOnline: true})`. A valid persisted session
+returns immediately. Otherwise the selected mode controls the next step:
 
-Reuse the same `ONE_USER_DATA_DIR` across runs. The first run may need
-credentials; later runs use the persisted authenticated session while valid.
-Tokens stay inside 1Browser and are never exposed by this SDK.
+| Mode | Behavior after an unauthenticated online check |
+| --- | --- |
+| `auto` | Use complete credentials when present; otherwise open interactive login. This is the default. |
+| `credentials-only` | Require both credentials and never open login UI. |
+| `interactive-only` | Ignore configured credentials and open login UI. |
+| `error` | Fail immediately. |
+
+Credential sign-in calls `Browser.signin`, validates `AuthResponse.success`,
+and polls for up to `timeoutMs` (15 seconds by default). Interactive login
+calls `Browser.login` once and polls for up to `interactiveTimeoutMs` (5
+minutes by default). Both use `pollIntervalMs` (500 milliseconds by default).
+All timeout values must be positive finite numbers.
+
+Use the notification hook to guide a local user:
+
+```js
+await client.ensureAuthenticated({
+  onInteractiveLogin({windowId, targetId}) {
+    console.log(
+      `Complete sign-in in the opened 1Browser window (${windowId}, ${targetId}).`,
+    );
+  },
+});
+```
+
+The callback runs once after a valid login target opens. The SDK waits for a
+later online state with `signedIn: true`; an open target alone is not proof of
+authentication. Concurrent account-dependent calls share one authentication
+promise, so only one login window and polling loop are created. The promise is
+cleared after success or failure, and `close()` cancels a pending wait.
+
+A partial credential pair throws
+`ERR_ONE_BROWSER_AUTH_CREDENTIALS_INCOMPLETE`. Invalid configured credentials
+remain visible and do not fall back to interactive login. An interactive
+timeout throws `ERR_ONE_BROWSER_AUTH_INTERACTIVE_TIMEOUT`.
+
+Reuse the same `ONE_USER_DATA_DIR` across runs. Later runs use the persisted
+session while it remains valid. Tokens and credentials entered in the login
+UI stay inside 1Browser and are never exposed or captured by this SDK.
 
 Account-dependent SDK methods automatically establish authentication if the
 caller has not already called `ensureAuthenticated()`.
@@ -262,7 +323,7 @@ still excludes ephemeral profiles.
 - `use-existing` never creates profiles and fails if too few matches exist.
 
 For a prefix `Search`, the first names are `Search 01`, `Search 02`, and so on.
-Version 0.1 infers application ownership from these exact deterministic names;
+Version 0.2 infers application ownership from these exact deterministic names;
 1Browser does not currently expose a profile metadata tag for stronger
 ownership. The SDK always passes `ProfileInfo.id`, never a display name, to
 profile operations.
@@ -451,6 +512,12 @@ The public error hierarchy is:
 
 Every SDK error has a stable `code`. Error messages contain actionable counts
 or response codes where available, but never credentials or tokens.
+Authentication-specific codes include:
+
+- `ERR_ONE_BROWSER_AUTH_CREDENTIALS_INCOMPLETE`;
+- `ERR_ONE_BROWSER_AUTH_INTERACTIVE_DISABLED`;
+- `ERR_ONE_BROWSER_AUTH_INTERACTIVE_TIMEOUT`;
+- `ERR_ONE_BROWSER_AUTH_TIMEOUT`.
 
 ## Explicit logout
 
@@ -520,7 +587,7 @@ The SDK maps directly to the documented methods:
 
 | SDK method | Browser CDP methods |
 | --- | --- |
-| `ensureAuthenticated` | `getAuthState`, `signin` |
+| `ensureAuthenticated` | `getAuthState`, `signin`, `login` |
 | `signup` | `signup` |
 | `login` | `login` |
 | `verify` | `verify` |
@@ -538,6 +605,7 @@ The SDK maps directly to the documented methods:
 
 | SDK version | Node.js | Puppeteer | 1Browser |
 | --- | ---: | ---: | --- |
+| 0.2.0 | >=22.12.0 | 25.3.0 | Interactive auth fallback and current documented `Browser` CDP API |
 | 0.1.0 | >=22.12.0 | 25.3.0 | Current documented `Browser` CDP API |
 
 Target matching is the most version-sensitive boundary and is isolated in

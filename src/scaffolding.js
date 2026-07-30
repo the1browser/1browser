@@ -66,7 +66,15 @@ async function main() {
   });
   const client = await OneBrowser.launch(configuration);
   try {
-    await client.ensureAuthenticated();
+    await client.ensureAuthenticated({
+      onInteractiveLogin() {
+        console.log(
+          'Complete sign-in in the opened 1Browser window. ' +
+          'Automation will continue automatically after authentication.',
+        );
+      },
+    });
+    console.log('Authentication confirmed.');
     const {profiles} = await client.ensureProfiles({
       count: task.profileCount,
       namePrefix: task.profileNamePrefix,

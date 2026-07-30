@@ -5,17 +5,32 @@ export interface Credentials {
   password?: string;
 }
 
+export type AuthenticationMode =
+  | 'auto'
+  | 'credentials-only'
+  | 'interactive-only'
+  | 'error';
+
+export interface AuthenticationOptions {
+  mode?: AuthenticationMode;
+  timeoutMs?: number;
+  interactiveTimeoutMs?: number;
+  pollIntervalMs?: number;
+}
+
+export interface EnsureAuthenticatedOptions extends AuthenticationOptions {
+  email?: string;
+  password?: string;
+  onInteractiveLogin?: (target: BrowserWindowTarget) => void;
+}
+
 export interface LaunchOptions {
   executablePath: string;
   userDataDir: string;
   credentials?: Credentials;
+  auth?: AuthenticationOptions;
   headless?: false;
   launchArgs?: string[];
-  auth?: {
-    validateOnline?: boolean;
-    timeoutMs?: number;
-    pollIntervalMs?: number;
-  };
 }
 
 export interface ConfigurationResolutionOptions {
@@ -131,12 +146,9 @@ export class OneBrowser {
   static launch(options: LaunchOptions): Promise<OneBrowser>;
 
   getAuthState(options?: {validateOnline?: boolean}): Promise<AuthState>;
-  ensureAuthenticated(options?: {
-    email?: string;
-    password?: string;
-    timeoutMs?: number;
-    pollIntervalMs?: number;
-  }): Promise<AuthState>;
+  ensureAuthenticated(
+    options?: EnsureAuthenticatedOptions,
+  ): Promise<AuthState>;
   signup(options: {
     email: string;
     password: string;

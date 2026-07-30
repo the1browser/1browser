@@ -81,6 +81,8 @@ class OneBrowser {
     this.closed = false;
     this.closePromise = undefined;
     this.authenticated = false;
+    this.authenticationPromise = undefined;
+    this.authenticationAbortController = undefined;
     this.profileCapacity = createProfileCapacityReader(cdp);
   }
 
@@ -101,15 +103,37 @@ class OneBrowser {
     return state;
   }
 
-  async ensureAuthenticated(options) {
+  async ensureAuthenticated(options = {}) {
     this.assertOpen();
-    const wasAuthenticated = this.authenticated;
-    const state = await ensureAuthenticated(this.cdp, this.options, options);
-    this.authenticated = true;
-    if (!wasAuthenticated) {
-      this.profileCapacity.reset();
+    if (this.authenticationPromise) {
+      return this.authenticationPromise;
     }
-    return state;
+
+    const abortController = new AbortController();
+    this.authenticationAbortController = abortController;
+    const authenticationPromise = (async () => {
+      const wasAuthenticated = this.authenticated;
+      const state = await ensureAuthenticated(this.cdp, this.options, {
+        ...options,
+        signal: abortController.signal,
+      });
+      this.assertOpen();
+      this.authenticated = true;
+      if (!wasAuthenticated) {
+        this.profileCapacity.reset();
+      }
+      return state;
+    })();
+    this.authenticationPromise = authenticationPromise;
+
+    try {
+      return await authenticationPromise;
+    } finally {
+      if (this.authenticationPromise === authenticationPromise) {
+        this.authenticationPromise = undefined;
+        this.authenticationAbortController = undefined;
+      }
+    }
   }
 
   async signup(options) {
@@ -137,6 +161,7 @@ class OneBrowser {
     if (!this.authenticated) {
       await this.ensureAuthenticated();
     }
+    this.assertOpen();
   }
 
   async logout() {
@@ -280,6 +305,7 @@ class OneBrowser {
     }
     this.closed = true;
     this.authenticated = false;
+    this.authenticationAbortController?.abort(new ClientClosedError());
     this.closePromise = (async () => {
       try {
         await this.browser.close();

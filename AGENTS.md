@@ -37,12 +37,19 @@ directory between concurrently running browser processes.
 Before calling account-dependent profile, fingerprint, or proxy methods:
 
 1. Call `Browser.getAuthState({validateOnline: true})`.
-2. When `signedIn` is `false`, obtain credentials from `ONE_EMAIL` and
-   `ONE_PASSWORD`.
-3. Call `Browser.signin({email, password})`.
-4. Check `AuthResponse.success`.
-5. Call `Browser.getAuthState({validateOnline: true})` again.
-6. Continue only when `signedIn` is `true`.
+2. Reuse a valid persisted session when `signedIn` is `true`.
+3. When a complete credential pair is available and the authentication mode
+   permits it, call `Browser.signin({email, password})` and check
+   `AuthResponse.success`.
+4. Otherwise, when interactive authentication is permitted, call
+   `Browser.login()` and wait for the user to complete sign-in.
+5. Poll `Browser.getAuthState({validateOnline: true})` for a bounded period.
+6. Continue only after online authentication reports `signedIn: true`.
+
+For local beginner applications, prefer `auth.mode = "auto"`. Do not ask a
+beginner for credentials before attempting the documented interactive-login
+fallback. For CI or unattended execution, use
+`auth.mode = "credentials-only"` or `auth.mode = "error"`.
 
 Do not infer authentication from:
 
@@ -118,10 +125,10 @@ stable user-data directory and discovers known native installations.
 AI agents MUST NOT delegate directory creation, `package.json` initialization,
 dependency installation, source-file creation, `.gitignore` creation,
 user-data-directory selection, example copying, or `.env.example` copying to
-the beginner. Ask only for a genuinely undiscoverable executable path,
-credentials needed for an unauthenticated session, consent for a protected
-external action, or another task-specific value that cannot be inferred
-safely.
+the beginner. Ask only for a genuinely undiscoverable executable path, manual
+completion of interactive login, credentials explicitly required for
+unattended execution, consent for a protected external action, or another
+task-specific value that cannot be inferred safely.
 
 ## Profiles
 
@@ -148,8 +155,8 @@ bulk deletion result.
 Generated examples MUST:
 
 - be executable without omitted helper functions;
-- validate required environment variables;
-- validate `AuthResponse.success`;
+- validate environment variables required by the selected mode;
+- validate `AuthResponse.success` whenever credential sign-in is used;
 - handle failed and expired authentication;
 - use `try`/`finally` for browser cleanup;
 - avoid `Browser.logout` during ordinary cleanup;
@@ -168,7 +175,7 @@ resolve configuration
 → launch 1browser
 → create a CDP session
 → check online auth state
-→ sign in when necessary
+→ use credential sign-in when available, otherwise interactive login
 → confirm auth state
 → obtain or create one profile
 → open the profile window

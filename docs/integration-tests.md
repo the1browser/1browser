@@ -27,7 +27,7 @@ npm ci
 Copy-Item .env.integration.example .env.integration
 ```
 
-At minimum configure:
+For real-browser tests, configure:
 
 ```dotenv
 ONE_BROWSER_INTEGRATION=1
@@ -37,8 +37,16 @@ ONE_EMAIL=<test-account-email>
 ONE_PASSWORD=<test-account-password>
 ```
 
-`ONE_EMAIL` and `ONE_PASSWORD` are only needed while the persisted session is
-unavailable. Keep `.env.integration` out of version control.
+`ONE_EMAIL` and `ONE_PASSWORD` are optional for a local interactive run but
+recommended for unattended integration jobs. Keep `.env.integration` out of
+version control.
+
+The controlled interactive-auth integration tests use an in-process CDP
+fixture and need no native browser or environment file:
+
+```bash
+npm run test:integration:controlled
+```
 
 ## Test organization
 
@@ -48,6 +56,8 @@ Integration tests are grouped for independent extension:
 test/integration/
 ├── account/
 │   ├── lifecycle.test.js
+│   ├── interactive-fallback.controlled.test.js
+│   ├── interactive-fallback.real.test.js
 │   ├── login.test.js
 │   ├── signup.test.js
 │   └── verify.test.js
@@ -101,13 +111,14 @@ npm run test:integration
 ```
 
 Without `ONE_BROWSER_INTEGRATION=1`, every real-browser test is reported as
-skipped. Tests with additional risk remain skipped until their own opt-in is
-enabled.
+skipped. Controlled integration tests still run. Tests with additional risk
+or manual steps remain skipped until their own opt-in is enabled.
 
 ## Mutation and external-action flags
 
 | Flag | Effect |
 | --- | --- |
+| `ONE_BROWSER_INTERACTIVE_AUTH=1` | Runs manual first-run interactive authentication and repeated-session reuse in `ONE_INTERACTIVE_USER_DATA_DIR`. |
 | `ONE_BROWSER_PROFILE_CRUD=1` | Creates, lists, and deletes uniquely named test profiles. |
 | `ONE_BROWSER_SIGNUP=1` | Creates a real account using `ONE_SIGNUP_EMAIL` and `ONE_SIGNUP_PASSWORD`. |
 | `ONE_BROWSER_VERIFY=1` | Sends a verification email for the main test account. |
@@ -122,6 +133,20 @@ The signup test also requires
 `ONE_USER_DATA_DIR`. Signup credentials must identify a new, previously
 unused account, so this test is intentionally not repeatable with the same
 email address.
+
+The interactive-auth test requires a clean, dedicated
+`ONE_INTERACTIVE_USER_DATA_DIR`. Do not configure credentials for this test.
+After it opens 1Browser, complete login manually. The test confirms that
+profile access begins after authentication, closes without logout, relaunches
+with the same directory, and verifies that the persisted session does not open
+another login target. Configure its bounds with:
+
+```dotenv
+ONE_BROWSER_INTERACTIVE_AUTH=1
+ONE_INTERACTIVE_USER_DATA_DIR=/absolute/path/to/clean/interactive-auth-data
+ONE_INTERACTIVE_AUTH_TIMEOUT_MS=300000
+ONE_INTERACTIVE_AUTH_TEST_TIMEOUT_MS=360000
+```
 
 Fingerprint writes use:
 

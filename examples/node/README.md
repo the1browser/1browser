@@ -25,9 +25,9 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` with an explicit 1browser executable and persistent user-data
-directory. Credentials are used only when the persisted session is not
-authenticated.
+Edit `.env` only for values you want to override. Credentials are optional:
+without a persisted session or complete pair, the SDK opens the native login
+UI and waits for manual sign-in.
 
 Run one operation at a time:
 
@@ -86,6 +86,6 @@ and proxy wrapper:
   `ONE_PROXY_TYPE`, starts a connection check, and requests a new paid catalog
   proxy only with `ONE_REQUEST_NEW_PROXY=1`.
 
-The first run may sign in with `ONE_EMAIL` and `ONE_PASSWORD`. Repeated runs
-reuse the same `ONE_USER_DATA_DIR` and deterministic profile names. Only
-`npm run logout` explicitly signs out.
+The first run uses `ONE_EMAIL` and `ONE_PASSWORD` when both exist, otherwise it
+opens interactive login. Repeated runs reuse the same `ONE_USER_DATA_DIR` and
+deterministic profile names. Only `npm run logout` explicitly signs out.

@@ -21,8 +21,8 @@ The agent should create the application directory, initialize the Node.js
 project, install the current local SDK, generate the source and ignored
 configuration, discover the native 1Browser installation, choose a stable
 application-specific user-data directory, run checks, and run the application
-when possible. It should ask only for genuinely missing values, such as
-credentials when the persisted session is not authenticated.
+when possible. It should ask only for genuinely missing values, such as an
+undiscoverable executable path or completion of interactive sign-in.
 
 The repository provides a non-interactive scaffolder for that workflow:
 
@@ -41,7 +41,8 @@ Every automation client MUST:
 1. Resolve a verified native 1Browser executable.
 2. Use an explicit persistent application-specific user-data directory.
 3. Call `Browser.getAuthState({validateOnline: true})`.
-4. Sign in only when the persisted session is unavailable.
+4. Use complete configured credentials when available; otherwise open the
+   native login UI and wait for manual sign-in.
 5. Confirm authentication before profile operations.
 6. Reuse the same user-data directory across runs.
 7. Avoid `Browser.logout` unless the user explicitly requests logout.
@@ -68,7 +69,14 @@ const config = await resolveConfiguration({
 });
 const client = await OneBrowser.launch(config);
 try {
-  await client.ensureAuthenticated();
+  await client.ensureAuthenticated({
+    onInteractiveLogin() {
+      console.log(
+        'Complete sign-in in the opened 1Browser window. ' +
+        'Automation will continue automatically after authentication.',
+      );
+    },
+  });
   const {profiles} = await client.ensureProfiles({
     count: 2,
     namePrefix: 'Example Task',
@@ -110,6 +118,14 @@ stored per application under `~/Library/Application Support/1Browser/Automation`
 on macOS, `%LOCALAPPDATA%\1Browser\Automation` on Windows, or
 `${XDG_DATA_HOME:-~/.local/share}/1browser/automation` on Linux. Explicit
 `userDataDir` and `ONE_USER_DATA_DIR` values override the default.
+
+On the first run, the SDK checks the persisted authentication state. If no
+session and no credentials are available, 1Browser opens its login UI and the
+application waits for manual sign-in. Profile automation continues
+automatically after online authentication is confirmed. Later runs reuse the
+persisted session. Credentials are optional for local interactive use; CI and
+scheduled jobs should select `auth.mode: 'credentials-only'` and provide both
+values from an approved secret source.
 
 Validate a generated or existing application with the doctor command:
 
@@ -163,11 +179,13 @@ npm install
 cp .env.example .env
 ```
 
-Set these values in `.env`:
+The path overrides are optional when native discovery succeeds. Credentials
+are also optional for local interactive use:
 
 ```dotenv
 ONE_BROWSER_PATH=/absolute/path/to/1browser
 ONE_USER_DATA_DIR=/absolute/path/to/persistent/1browser-automation-data
+# Optional for unattended credential sign-in:
 ONE_EMAIL=<email>
 ONE_PASSWORD=<password>
 ```
@@ -181,10 +199,10 @@ Run the canonical authentication and session-reuse example:
 npm run auth
 ```
 
-On the first run, it launches 1browser, checks the online auth state, signs in
-if necessary, confirms authentication, and closes the browser without logging
-out. On later runs with the same `ONE_USER_DATA_DIR`, it reuses the persisted
-session and does not request credentials while that session remains valid.
+On the first run, it launches 1browser, checks the online auth state, uses
+configured credentials or opens the native login UI, confirms authentication,
+and closes without logging out. On later runs with the same
+`ONE_USER_DATA_DIR`, it reuses the persisted session.
 
 Continue with the focused examples in [`examples/node`](examples/node):
 
@@ -210,14 +228,16 @@ Prepare the ignored local configuration:
 cp .env.integration.example .env.integration
 ```
 
-Set `ONE_BROWSER_PATH`, a dedicated persistent `ONE_USER_DATA_DIR`, test
-account credentials when the saved session is not already authenticated, and
-`ONE_BROWSER_INTEGRATION=1`. Mutating or external actions have additional
-explicit opt-in flags, so ordinary `npm test` runs remain non-destructive.
+Set `ONE_BROWSER_PATH`, a dedicated persistent `ONE_USER_DATA_DIR`, and
+`ONE_BROWSER_INTEGRATION=1`. Supply test-account credentials for unattended
+runs; local interactive authentication is also supported. Mutating or
+external actions have additional explicit opt-in flags, so ordinary
+`npm test` runs remain non-destructive.
 
 Run one test, one group, or all groups:
 
 ```bash
+npm run test:integration:controlled
 npm run test:integration:file -- account/login.test.js
 npm run test:integration:fingerprint
 npm run test:integration

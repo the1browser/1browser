@@ -6,7 +6,14 @@ const {OneBrowser} = require('@1browser/sdk');
 async function main() {
   const client = await OneBrowser.launch(await loadConfig());
   try {
-    const authState = await client.ensureAuthenticated();
+    const authState = await client.ensureAuthenticated({
+      onInteractiveLogin() {
+        console.log(
+          'Complete sign-in in the opened 1Browser window. ' +
+          'Automation will continue automatically after authentication.',
+        );
+      },
+    });
     console.log(`Authenticated: ${authState.state}`);
   } finally {
     // Normal cleanup preserves the session for the next run.

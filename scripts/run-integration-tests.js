@@ -84,10 +84,15 @@ function main() {
     console.log(`- ${relativeTestPath(file)}`);
   }
 
+  const environmentArguments = fs.existsSync(
+    path.join(repositoryRoot, '.env.integration'),
+  )
+    ? ['--env-file=.env.integration']
+    : [];
   const result = spawnSync(
     process.execPath,
     [
-      '--env-file=.env.integration',
+      ...environmentArguments,
       '--test',
       '--test-concurrency=1',
       ...files.map(relativeTestPath),
