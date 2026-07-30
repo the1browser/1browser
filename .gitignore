@@ -1,0 +1,6 @@
+.env
+.env.integration
+.onebrowser/
+.sentry-native/
+examples/node/.env
+node_modules/

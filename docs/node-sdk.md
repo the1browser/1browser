@@ -1,0 +1,521 @@
+# @1browser/sdk
+
+`@1browser/sdk` is a small CommonJS SDK over `puppeteer-core` and the
+documented custom `Browser.*` CDP methods in 1Browser. It owns browser launch,
+online authentication checks, deterministic profile selection, profile target
+resolution, bounded task concurrency, and cleanup.
+
+The package is prepared for publication but is not currently published to npm.
+
+## Automatic application setup
+
+For a new application, an AI coding agent should run the repository
+scaffolder and replace the generated task placeholders:
+
+```bash
+node ./bin/create-onebrowser-app.js <application-id> --non-interactive
+```
+
+The scaffolder creates the directory and Node.js project, installs this local
+SDK, writes `.gitignore`, creates ignored `.onebrowser/config.json`, creates
+complete source files, and runs syntax checks. It refuses to overwrite an
+existing path and never creates or copies `.env`.
+
+## Manual SDK installation
+
+This section is for SDK contributors and existing application maintainers.
+
+From this repository root:
+
+```bash
+npm install
+```
+
+To install the current checkout into another local project, use:
+
+```bash
+npm install /absolute/path/to/1browser
+```
+
+From `examples/node`, the equivalent relative command is:
+
+```bash
+npm install ../..
+```
+
+Node.js 22.12 or later is required. The package pins `puppeteer-core` 25.3.0
+and never downloads a browser.
+
+## Quick start
+
+```js
+const {OneBrowser, resolveConfiguration} = require('@1browser/sdk');
+
+const configuration = await resolveConfiguration({
+  applicationId: 'example-task',
+  options: {},
+  env: process.env,
+});
+const client = await OneBrowser.launch(configuration);
+
+try {
+  await client.ensureAuthenticated();
+
+  const {profiles} = await client.ensureProfiles({
+    count: 5,
+    namePrefix: 'Example Task',
+  });
+
+  const results = await client.runForProfiles({
+    profiles,
+    concurrency: 2,
+    task: async ({page}) => {
+      await page.goto('https://example.com', {
+        waitUntil: 'domcontentloaded',
+      });
+      return {url: page.url(), title: await page.title()};
+    },
+  });
+
+  console.table(results);
+} finally {
+  await client.close();
+}
+```
+
+`close()` ends the browser process but never calls `Browser.logout`.
+
+## Configuration resolution
+
+The supported resolver is:
+
+```js
+const config = await resolveConfiguration({
+  applicationId: 'amazon-search',
+  options,
+  env: process.env,
+});
+```
+
+Each value resolves from explicit SDK options, environment variables, ignored
+local application configuration, and then a safe platform-specific default.
+The executable default is native installation discovery; the user-data
+default is `getDefaultUserDataDir({applicationId})`. A missing or ambiguous
+browser produces an actionable error instead of selecting another browser.
+
+Ignored `.onebrowser/config.json` can contain machine-specific launch values:
+
+```json
+{
+  "executablePath": "/custom/path/to/1browser",
+  "userDataDir": "/custom/persistent/browser-state"
+}
+```
+
+Credentials remain separate. They may be supplied through explicit SDK
+options, `ONE_EMAIL` / `ONE_PASSWORD`, or ignored
+`.onebrowser/secrets.json`. Generated files never contain real credentials:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "local-secret"
+}
+```
+
+Known native installation paths are kept in `src/platform-paths.js`:
+
+- macOS: `/Applications/1Browser.app/Contents/MacOS/1Browser` and the same
+  bundle under `~/Applications`;
+- Windows: `1Browser\1Browser.exe` under `%LOCALAPPDATA%\Programs`,
+  `%LOCALAPPDATA%`, `%ProgramFiles%`, or `%ProgramFiles(x86)%`;
+- Linux: `/opt/1browser/1browser`, `/usr/local/bin/1browser`,
+  `/usr/bin/1browser`, `~/.local/bin/1browser`, or `/snap/bin/1browser`.
+
+Discovery checks that candidates exist, deduplicates links to the same
+installation, rejects Chrome and Chromium, and requires an explicit choice
+when distinct known installations coexist.
+
+Stable application data is created automatically under:
+
+- macOS: `~/Library/Application Support/1Browser/Automation/<application-id>`;
+- Windows: `%LOCALAPPDATA%\1Browser\Automation\<application-id>`;
+- Linux: `${XDG_DATA_HOME:-~/.local/share}/1browser/automation/<application-id>`.
+
+The application ID is sanitized before it becomes a directory name. Explicit
+`userDataDir`, `ONE_USER_DATA_DIR`, and ignored local configuration override
+the default.
+
+### Strict environment-only compatibility
+
+`loadEnvironmentConfig()` reads:
+
+```dotenv
+ONE_BROWSER_PATH=/absolute/path/to/1browser
+ONE_USER_DATA_DIR=/absolute/path/to/persistent/1browser-data
+ONE_EMAIL=user@example.com
+ONE_PASSWORD=secret
+```
+
+This compatibility helper requires both the executable and user-data
+directory. New generated applications should use `resolveConfiguration()`.
+The SDK rejects temporary user-data directories and creates a missing
+persistent directory. Credentials are optional until the persisted session is
+unavailable.
+
+Configuration can also be supplied directly:
+
+```js
+const client = await OneBrowser.launch({
+  executablePath: process.env.ONE_BROWSER_PATH,
+  userDataDir: process.env.ONE_USER_DATA_DIR,
+  credentials: {
+    email: process.env.ONE_EMAIL,
+    password: process.env.ONE_PASSWORD,
+  },
+  launchArgs: ['--disable-sync'],
+});
+```
+
+`headless` can only be omitted or set to `false`. Additional arguments cannot
+override the persistent user-data directory or remote debugging port.
+
+## Doctor
+
+Run diagnostics without printing credentials:
+
+```bash
+node ./bin/onebrowser-doctor.js --application-id amazon-search
+```
+
+The command checks the Node.js version, SDK installation, native executable
+discovery, user-data path and write access, and Chromium lock files. Add
+`--check-auth` to launch 1Browser, read the online authentication state, and
+close it without logging out.
+
+## Authentication and session reuse
+
+`ensureAuthenticated()` always begins with
+`Browser.getAuthState({validateOnline: true})`. If the persistent session is
+valid, it returns without using credentials. Otherwise it calls
+`Browser.signin`, validates `AuthResponse.success`, and polls the online state
+for a bounded period.
+
+Reuse the same `ONE_USER_DATA_DIR` across runs. The first run may need
+credentials; later runs use the persisted authenticated session while valid.
+Tokens stay inside 1Browser and are never exposed by this SDK.
+
+Account-dependent SDK methods automatically establish authentication if the
+caller has not already called `ensureAuthenticated()`.
+
+### Signup, web login, and email verification
+
+`signup()` maps directly to `Browser.signup` and is intentionally available
+before authentication:
+
+```js
+const signupCredentials = {
+  email: process.env.ONE_EMAIL,
+  password: process.env.ONE_PASSWORD,
+};
+
+const response = await client.signup(signupCredentials);
+if (!response.success) {
+  console.error(response.responseCode, response.body);
+} else {
+  await client.ensureAuthenticated(signupCredentials);
+}
+```
+
+Backend business failures are returned as `AuthResponse` rather than thrown.
+Credentials are never included in errors. A successful signup starts the
+browser's signin flow; explicitly call `ensureAuthenticated()` with the same
+credentials to wait for a confirmed online session before continuing.
+
+`login()` opens the 1Browser web login page and returns `{windowId, targetId}`.
+It does not accept credentials and does not require an existing authenticated
+session. `verify()` requires authentication and returns the backend
+`AuthResponse` from `Browser.verify`.
+
+## Profiles and ownership
+
+`getPersistentProfiles()` excludes profiles with `omitted === true` or
+`ephemeral === true`. `includeOmitted: true` includes omitted profiles but
+still excludes ephemeral profiles.
+
+`ensureProfiles()` supports three modes:
+
+- `ensure-count` (default) reuses deterministic names and creates only missing
+  profiles.
+- `create-new` creates exactly the requested number of additional profiles
+  after checking the full account limit.
+- `use-existing` never creates profiles and fails if too few matches exist.
+
+For a prefix `Search`, the first names are `Search 01`, `Search 02`, and so on.
+Version 0.1 infers application ownership from these exact deterministic names;
+1Browser does not currently expose a profile metadata tag for stronger
+ownership. The SDK always passes `ProfileInfo.id`, never a display name, to
+profile operations.
+
+Creation modes check that the full account quota is available before creating
+anything. The underlying CDP API is not transactional, so an unexpected
+browser or transport failure during a multi-profile creation sequence can
+still leave profiles that were created before that failure.
+
+After authentication, 1Browser may refresh account policy asynchronously and
+briefly report zero available profile slots. The SDK waits once per client for
+that policy refresh before treating zero as the real limit. The public
+`getAvailableProfileCreationCount()` method uses the same bounded wait:
+
+```js
+const available = await client.getAvailableProfileCreationCount({
+  timeoutMs: 15_000,
+  pollIntervalMs: 250,
+});
+```
+
+Set `waitForPolicy: false` to perform a single immediate CDP read. Once the SDK
+has observed a settled capacity, later zero values are returned immediately.
+
+## Deleting profiles
+
+Deletion is always explicit. `ensureProfiles()` never deletes profiles when a
+later call requests a smaller count.
+
+Delete one profile by its `ProfileInfo.id`:
+
+```js
+const result = await client.deleteProfile(profile.id);
+console.log(result); // {profileId: '...', success: true}
+```
+
+The method throws `ProfileDeletionError` unless
+`Browser.deleteProfileById` returns `{success: true}`.
+
+Delete several explicitly selected IDs:
+
+```js
+const results = await client.deleteProfiles(
+  profiles.map((profile) => profile.id),
+);
+
+for (const result of results) {
+  if (!result.success) {
+    console.error(result.profileId, result.error.message);
+  }
+}
+```
+
+The complete ID list is validated before the first deletion, duplicate IDs
+are rejected, and deletions run sequentially. The result order matches the
+input order. A browser failure for one ID is recorded in that ID's result and
+does not hide or skip the remaining requested IDs.
+
+Never pass display names to deletion methods. Names are not unique and the SDK
+does not translate names or prefixes into IDs.
+
+## Profile pages and target resolution
+
+`openProfilePage(profile.id)` calls `Browser.createWindowForProfile`, observes
+targets before that command, resolves the returned CDP `targetId`, and returns
+the corresponding Puppeteer `Page`.
+
+Puppeteer 25.3.0 has no public `Target.id()`. The compatibility boundary in
+[`src/targets.js`](../src/targets.js) uses only public Puppeteer APIs: it
+creates a CDP session for each candidate target and calls standard
+`Target.getTargetInfo`. It does not read Puppeteer private fields. A future
+public `Target.id()` is preferred automatically when available.
+
+## Multi-profile execution
+
+`runForProfiles()` defaults to concurrency `2`, preserves input ordering, and
+returns one structured result per profile. A failed task does not stop other
+tasks unless `stopOnError: true` is set. When stopping early, unstarted
+profiles receive explicit failed results.
+
+The runner closes only the `Page` it opened for each task. It does not close
+the global browser or log out after an individual task.
+
+## Fingerprint settings
+
+Fingerprint methods accept an optional `profileId`. When omitted, 1Browser
+uses its default loaded profile:
+
+```js
+const setting = await client.getFingerprintSetting({
+  profileId: profile.id,
+  name: 'screen_resolution',
+});
+
+const effective = await client.setFingerprintSetting({
+  profileId: profile.id,
+  name: 'screen_resolution',
+  value: '1024x768',
+});
+
+const settings = await client.getFingerprintSettings({
+  profileId: profile.id,
+});
+
+const started = await client.generateFingerprint({
+  profileId: profile.id,
+});
+```
+
+Setting values are passed through without inventing SDK-specific enums. Use
+the names and value types documented by the current 1Browser CDP API.
+
+## Proxy settings
+
+Proxy wrappers preserve the settings WebUI object returned by 1Browser:
+
+```js
+const current = await client.getProxySettings({profileId: profile.id});
+
+const settings = await client.setProxySettings({
+  profileId: profile.id,
+  type: 'User proxy',
+  settings: {
+    user: 'http://user:password@host:8080',
+    free: current.free ?? '',
+    tor: current.tor ?? '',
+    datacenter: current.datacenter ?? '',
+    mobile: current.mobile ?? '',
+    resident: current.resident ?? '',
+  },
+});
+
+await client.setProxyType({
+  profileId: profile.id,
+  type: 'No proxy',
+});
+
+const checkStarted = await client.checkProxyConnection({
+  profileId: profile.id,
+});
+const requestStarted = await client.requestNewProxy({
+  profileId: profile.id,
+});
+```
+
+Proxy URLs may contain credentials. Do not print settings objects or commit
+them to source control.
+
+## Errors
+
+The public error hierarchy is:
+
+- `OneBrowserError`
+- `ConfigurationError`
+- `BrowserLaunchError`
+- `AuthenticationError`
+- `AuthenticationTimeoutError`
+- `ProfileError`
+- `ProfileLimitError`
+- `ProfileTargetError`
+- `ProfileDeletionError`
+- `ProfileTaskError`
+- `FingerprintError`
+- `ProxyError`
+- `ClientClosedError`
+
+Every SDK error has a stable `code`. Error messages contain actionable counts
+or response codes where available, but never credentials or tokens.
+
+## Explicit logout
+
+Logout is deliberately separate from cleanup:
+
+```js
+const client = await OneBrowser.launch(loadEnvironmentConfig());
+try {
+  await client.logout();
+} finally {
+  await client.close();
+}
+```
+
+After explicit logout, the next run must authenticate again. Normal
+applications should only call `close()`.
+
+## Low-level CDP escape hatch
+
+Use `client.send(method, params)` only when a documented 1Browser operation is
+not yet wrapped by the SDK. It ensures the client is authenticated but
+otherwise passes the command through unchanged. Prefer the typed high-level
+methods when one exists. Pre-authentication operations such as signup and web
+login must use their dedicated wrappers.
+
+## API reference
+
+- `OneBrowser.launch(options)`
+- `getAuthState(options?)`
+- `ensureAuthenticated(options?)`
+- `signup(options)`
+- `login()`
+- `verify()`
+- `getProfiles()`
+- `getPersistentProfiles(options?)`
+- `getAvailableProfileCreationCount(options?)`
+- `getFingerprintSetting(options)`
+- `getFingerprintSettings(options?)`
+- `setFingerprintSetting(options)`
+- `generateFingerprint(options?)`
+- `getProxySettings(options?)`
+- `setProxySettings(options)`
+- `setProxyType(options)`
+- `checkProxyConnection(options?)`
+- `requestNewProxy(options?)`
+- `createProfile(name)`
+- `deleteProfile(profileId)`
+- `deleteProfiles(profileIds)`
+- `ensureProfiles(options)`
+- `openProfilePage(profileId, options?)`
+- `runForProfiles(options)`
+- `send(method, params?)`
+- `logout()`
+- `close()`
+- `resolveConfiguration(options)`
+- `sanitizeApplicationId(applicationId)`
+- `getDefaultUserDataDir(options)`
+- `findInstalledBrowser(options?)`
+- `loadEnvironmentConfig(env?)`
+
+The package includes TypeScript declarations for all public methods, options,
+results, profile data, and error types.
+
+## CDP mapping
+
+The SDK maps directly to the documented methods:
+
+| SDK method | Browser CDP methods |
+| --- | --- |
+| `ensureAuthenticated` | `getAuthState`, `signin` |
+| `signup` | `signup` |
+| `login` | `login` |
+| `verify` | `verify` |
+| `getProfiles` | `getProfiles` |
+| `getAvailableProfileCreationCount` | `getAvailableProfileCreationCount` |
+| Fingerprint wrappers | `getFingerprintSetting`, `getFingerprintSettings`, `setFingerprintSetting`, `generateFingerprint` |
+| Proxy wrappers | `getProxySettings`, `setProxySettings`, `setProxyType`, `checkProxyConnection`, `requestNewProxy` |
+| `createProfile` | `getAvailableProfileCreationCount`, `createProfile` |
+| `deleteProfile`, `deleteProfiles` | `deleteProfileById` |
+| `ensureProfiles` | `getProfiles`, `getAvailableProfileCreationCount`, `createProfile` |
+| `openProfilePage` | `createWindowForProfile` |
+| `logout` | `logout` |
+
+## Compatibility
+
+| SDK version | Node.js | Puppeteer | 1Browser |
+| --- | ---: | ---: | --- |
+| 0.1.0 | >=22.12.0 | 25.3.0 | Current documented `Browser` CDP API |
+
+Target matching is the most version-sensitive boundary and is isolated in
+[`src/targets.js`](../src/targets.js).
+
+## Security notes
+
+Do not commit `.env`, credentials, local browser paths, user-data directories,
+or screenshots containing sensitive data. Do not pass credentials through
+command-line arguments. Never share a user-data directory between concurrent
+browser processes.
