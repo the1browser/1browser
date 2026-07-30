@@ -104,6 +104,40 @@ test('rejects launch arguments that enable headless mode', () => {
   );
 });
 
+test('validates authentication mode and timeout configuration', () => {
+  const base = {
+    executablePath: process.execPath,
+    userDataDir: path.join(fixtureRoot, 'auth-data'),
+  };
+  const result = validateLaunchOptions({
+    ...base,
+    auth: {
+      mode: 'interactive-only',
+      timeoutMs: 10,
+      interactiveTimeoutMs: 20,
+      pollIntervalMs: 1,
+    },
+  });
+  assert.deepEqual(result.auth, {
+    mode: 'interactive-only',
+    timeoutMs: 10,
+    interactiveTimeoutMs: 20,
+    pollIntervalMs: 1,
+  });
+
+  for (const auth of [
+    {mode: 'unsupported'},
+    {timeoutMs: 0},
+    {interactiveTimeoutMs: Number.POSITIVE_INFINITY},
+    {pollIntervalMs: -1},
+  ]) {
+    assert.throws(
+      () => validateLaunchOptions({...base, auth}),
+      ConfigurationError,
+    );
+  }
+});
+
 test('environment helper does not include credential values in errors', () => {
   const secret = 'do-not-print-this';
   assert.throws(

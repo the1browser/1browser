@@ -194,6 +194,42 @@ function normalizeLaunchArgs(launchArgs, userDataDir) {
   return additional;
 }
 
+const authenticationModes = new Set([
+  'auto',
+  'credentials-only',
+  'interactive-only',
+  'error',
+]);
+
+function validateAuthenticationConfiguration(auth) {
+  if (auth === undefined) {
+    return undefined;
+  }
+  if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
+    throw new ConfigurationError('auth must be an object.');
+  }
+  if (auth.mode !== undefined && !authenticationModes.has(auth.mode)) {
+    throw new ConfigurationError(
+      `auth.mode must be one of: ${[...authenticationModes].join(', ')}.`,
+    );
+  }
+  for (const field of [
+    'timeoutMs',
+    'interactiveTimeoutMs',
+    'pollIntervalMs',
+  ]) {
+    if (
+      auth[field] !== undefined &&
+      (!Number.isFinite(auth[field]) || auth[field] <= 0)
+    ) {
+      throw new ConfigurationError(
+        `auth.${field} must be a positive finite number.`,
+      );
+    }
+  }
+  return {...auth};
+}
+
 function validateLaunchOptions(options) {
   if (!options || typeof options !== 'object' || Array.isArray(options)) {
     throw new ConfigurationError('Launch options are required.');
@@ -214,14 +250,7 @@ function validateLaunchOptions(options) {
   ) {
     throw new ConfigurationError('credentials must be an object.');
   }
-  if (
-    options.auth !== undefined &&
-    (!options.auth ||
-      typeof options.auth !== 'object' ||
-      Array.isArray(options.auth))
-  ) {
-    throw new ConfigurationError('auth must be an object.');
-  }
+  const auth = validateAuthenticationConfiguration(options.auth);
 
   return {
     executablePath,
@@ -235,7 +264,7 @@ function validateLaunchOptions(options) {
           password: credentials.password,
         }
       : undefined,
-    auth: options.auth,
+    auth,
     // Internal dependency injection used by unit tests.
     puppeteer: options.puppeteer,
     launchArgs,

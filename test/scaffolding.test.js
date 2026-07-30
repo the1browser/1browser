@@ -64,6 +64,16 @@ test('generates the project structure and ignored local configuration', () => {
     path.join(result.targetDir, 'src', 'task.js'),
     'utf8',
   );
+  assert.match(main, /onInteractiveLogin\(\)/);
+  assert.match(
+    main,
+    /Complete sign-in in the opened 1Browser window\./,
+  );
+  assert.match(main, /Authentication confirmed\./);
+  assert.ok(
+    main.indexOf('ensureAuthenticated') <
+      main.indexOf('ensureProfiles'),
+  );
   assert.match(main, /openingConcurrency: task\.openingConcurrency/);
   assert.match(main, /openTimeoutMs: task\.openTimeoutMs/);
   assert.match(task, /openingConcurrency: 2/);
