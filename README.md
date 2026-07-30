@@ -1,93 +1,247 @@
 # 1browser
 
+1browser exposes custom Chrome DevTools Protocol (CDP) methods for automating
+authentication, persistent browser profiles, fingerprints, and proxies. The
+repository includes a Node.js SDK that provides the safe lifecycle as a small,
+stable API. Use the
+[latest 1browser release](https://1browser.com/download/).
 
+## Build with an AI coding agent
 
-## Getting started
+Give an AI coding agent the repository and the task in plain language:
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+```text
+Use https://github.com/the1browser/1browser.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.com/easync/1browser.git
-git branch -M main
-git push -uf origin main
+Launch the browser, ensure five profiles exist, and search amazon.com for
+"iphone" from each profile.
 ```
 
-## Integrate with your tools
+The agent should create the application directory, initialize the Node.js
+project, install the current local SDK, generate the source and ignored
+configuration, discover the native 1Browser installation, choose a stable
+application-specific user-data directory, run checks, and run the application
+when possible. It should ask only for genuinely missing values, such as
+credentials when the persisted session is not authenticated.
 
-* [Set up project integrations](https://gitlab.com/easync/1browser/-/settings/integrations)
+The repository provides a non-interactive scaffolder for that workflow:
 
-## Collaborate with your team
+```bash
+node ./bin/create-onebrowser-app.js amazon-search --non-interactive
+```
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+That command is for the coding agent to run as part of fulfilling the request;
+the beginner does not need to create files, install dependencies, choose
+storage paths, or copy an example environment file.
 
-## Test and Deploy
+## Mandatory automation lifecycle
 
-Use the built-in continuous integration in GitLab.
+Every automation client MUST:
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+1. Resolve a verified native 1Browser executable.
+2. Use an explicit persistent application-specific user-data directory.
+3. Call `Browser.getAuthState({validateOnline: true})`.
+4. Sign in only when the persisted session is unavailable.
+5. Confirm authentication before profile operations.
+6. Reuse the same user-data directory across runs.
+7. Avoid `Browser.logout` unless the user explicitly requests logout.
 
-***
+See [Automation lifecycle](docs/automation-lifecycle.md) for the first-run and
+repeated-run flows and [User data directory](docs/user-data-directory.md) for
+storage requirements.
 
-# Editing this README
+## Node.js SDK
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+The SDK requires Node.js 22.12 or later, pins `puppeteer-core`, and never uses a
+Puppeteer-downloaded browser. It is not published to npm yet; the scaffolder
+installs the current checkout into generated applications.
 
-## Suggestions for a good README
+A minimal application looks like:
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```js
+const {OneBrowser, resolveConfiguration} = require('@1browser/sdk');
 
-## Name
-Choose a self-explaining name for your project.
+const config = await resolveConfiguration({
+  applicationId: 'example-task',
+  options: {},
+  env: process.env,
+});
+const client = await OneBrowser.launch(config);
+try {
+  await client.ensureAuthenticated();
+  const {profiles} = await client.ensureProfiles({
+    count: 2,
+    namePrefix: 'Example Task',
+  });
+  const results = await client.runForProfiles({
+    profiles,
+    concurrency: 2,
+    task: async ({page}) => {
+      await page.goto('https://example.com', {
+        waitUntil: 'domcontentloaded',
+      });
+      return {url: page.url(), title: await page.title()};
+    },
+  });
+  console.table(results);
+} finally {
+  await client.close();
+}
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+See the [SDK package documentation](docs/node-sdk.md) for profiles,
+errors, target resolution, TypeScript declarations, compatibility, and the
+low-level CDP escape hatch.
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+`resolveConfiguration()` resolves each setting in this order:
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+```text
+explicit SDK options
+→ environment variables
+→ .onebrowser/config.json and .onebrowser/secrets.json
+→ known native 1Browser install locations or a stable platform data directory
+→ actionable missing-value error
+```
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+It never searches for or launches Chrome or Chromium. Default browser state is
+stored per application under `~/Library/Application Support/1Browser/Automation`
+on macOS, `%LOCALAPPDATA%\1Browser\Automation` on Windows, or
+`${XDG_DATA_HOME:-~/.local/share}/1browser/automation` on Linux. Explicit
+`userDataDir` and `ONE_USER_DATA_DIR` values override the default.
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+Validate a generated or existing application with the doctor command:
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+```bash
+node ./bin/onebrowser-doctor.js --application-id example-task
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+It checks Node.js, SDK availability, executable discovery, persistent storage,
+write access, and user-data lock files without printing credentials. The
+optional `--check-auth` flag launches 1Browser only to check its online auth
+state, then closes it without logging out.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+Profile deletion is explicit through `deleteProfile(profileId)` or
+`deleteProfiles(profileIds)`. The SDK never deletes extra profiles
+automatically.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Profile creation methods handle the short account-policy refresh window after
+authentication by waiting once for `getAvailableProfileCreationCount()` to
+settle before treating a zero count as the real account limit.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+The SDK also provides typed wrappers for signup, web login, email verification,
+fingerprint settings, fingerprint generation, proxy settings, proxy health
+checks, and requesting a new catalog proxy. The raw `send()` method remains an
+escape hatch for future documented CDP additions.
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+## Manual SDK development
 
-## License
-For open source projects, say how it is licensed.
+This section is for contributors and advanced local development, not the
+beginner AI-agent workflow.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Install this repository's dependencies:
+
+```bash
+npm install
+```
+
+To consume the checkout from an existing local project, run
+`npm install /absolute/path/to/1browser` in that project.
+
+## Manual example setup
+
+This optional section is for developers who want to configure and run the
+checked-in examples themselves. AI coding agents should create and configure a
+new application automatically instead.
+
+The examples consume the local SDK package:
+
+```bash
+cd examples/node
+npm install
+cp .env.example .env
+```
+
+Set these values in `.env`:
+
+```dotenv
+ONE_BROWSER_PATH=/absolute/path/to/1browser
+ONE_USER_DATA_DIR=/absolute/path/to/persistent/1browser-automation-data
+ONE_EMAIL=<email>
+ONE_PASSWORD=<password>
+```
+
+`ONE_EMAIL` and `ONE_PASSWORD` are read only when the persisted session is not
+signed in. Do not commit `.env`.
+
+Run the canonical authentication and session-reuse example:
+
+```bash
+npm run auth
+```
+
+On the first run, it launches 1browser, checks the online auth state, signs in
+if necessary, confirms authentication, and closes the browser without logging
+out. On later runs with the same `ONE_USER_DATA_DIR`, it reuses the persisted
+session and does not request credentials while that session remains valid.
+
+Continue with the focused examples in [`examples/node`](examples/node):
+
+- list existing profiles;
+- create one profile after checking the account limit;
+- open one active persistent profile;
+- configure a user proxy;
+- ensure and search from multiple deterministic profiles with bounded
+  concurrency;
+- explicitly log out.
+
+## Real-browser integration tests
+
+The integration suite uses a native installed browser and a dedicated test
+account. Tests are organized into account, profile, fingerprint, and proxy
+groups. The cross-platform runner can execute one file, one group, or the
+entire suite, always serially to protect the shared persistent user-data
+directory.
+
+Prepare the ignored local configuration:
+
+```bash
+cp .env.integration.example .env.integration
+```
+
+Set `ONE_BROWSER_PATH`, a dedicated persistent `ONE_USER_DATA_DIR`, test
+account credentials when the saved session is not already authenticated, and
+`ONE_BROWSER_INTEGRATION=1`. Mutating or external actions have additional
+explicit opt-in flags, so ordinary `npm test` runs remain non-destructive.
+
+Run one test, one group, or all groups:
+
+```bash
+npm run test:integration:file -- account/login.test.js
+npm run test:integration:fingerprint
+npm run test:integration
+```
+
+The profile CRUD compatibility alias remains available:
+
+```bash
+npm run test:integration:profile-crud
+```
+
+See [Real-browser integration tests](docs/integration-tests.md) for every
+group, risk flag, native OS requirement, and macOS/Linux/Windows setup.
+
+## Documentation
+
+- [Automation lifecycle](docs/automation-lifecycle.md)
+- [Authentication](docs/authentication.md)
+- [User data directory](docs/user-data-directory.md)
+- [CDP method reference](docs/cdp-api.md)
+- [Node.js SDK](docs/node-sdk.md)
+- [Real-browser integration tests](docs/integration-tests.md)
+- [HTTP API](docs/api/index.md)
+- [Instructions for AI agents](AGENTS.md)
+
+API tokens for the HTTP API are available in the
+[1browser app](https://app.1browser.com/api). CDP authentication tokens are
+managed internally by the browser process and are never exposed to automation
+clients.
