@@ -204,6 +204,11 @@ For short natural-language requests:
 8. call `close` without logout;
 9. run checks, tests, and the application when possible.
 
+For large profile sets, keep `openingConcurrency` bounded independently from
+task `concurrency`. Increase `openTimeoutMs` when native profile startup is
+known to be slow; queued profiles do not consume this timeout until an opening
+slot is available.
+
 The SDK is not currently published to npm. Install it through the repository
 workspace or a local path; do not claim that it is available from the public
 npm registry.

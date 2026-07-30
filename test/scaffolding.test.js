@@ -55,6 +55,19 @@ test('generates the project structure and ignored local configuration', () => {
   assert.match(gitignore, /^\.onebrowser\/$/m);
   assert.match(gitignore, /^\.env$/m);
   assert.equal(fs.existsSync(path.join(result.targetDir, '.env')), false);
+
+  const main = fs.readFileSync(
+    path.join(result.targetDir, 'src', 'main.js'),
+    'utf8',
+  );
+  const task = fs.readFileSync(
+    path.join(result.targetDir, 'src', 'task.js'),
+    'utf8',
+  );
+  assert.match(main, /openingConcurrency: task\.openingConcurrency/);
+  assert.match(main, /openTimeoutMs: task\.openTimeoutMs/);
+  assert.match(task, /openingConcurrency: 2/);
+  assert.match(task, /openTimeoutMs: 30_000/);
 });
 
 test('non-interactive scaffolding installs the local SDK and checks syntax', () => {

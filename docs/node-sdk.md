@@ -69,6 +69,8 @@ try {
   const results = await client.runForProfiles({
     profiles,
     concurrency: 2,
+    openingConcurrency: 2,
+    openTimeoutMs: 30_000,
     task: async ({page}) => {
       await page.goto('https://example.com', {
         waitUntil: 'domcontentloaded',
@@ -328,10 +330,30 @@ public `Target.id()` is preferred automatically when available.
 
 ## Multi-profile execution
 
-`runForProfiles()` defaults to concurrency `2`, preserves input ordering, and
-returns one structured result per profile. A failed task does not stop other
-tasks unless `stopOnError: true` is set. When stopping early, unstarted
-profiles receive explicit failed results.
+`runForProfiles()` defaults to task concurrency `2`, profile-opening
+concurrency `2`, and a 30-second target-resolution timeout. These controls are
+independent:
+
+```js
+const results = await client.runForProfiles({
+  profiles,
+  concurrency: 10,
+  openingConcurrency: 2,
+  openTimeoutMs: 120_000,
+  task,
+});
+```
+
+`concurrency` limits tasks that may be active, while `openingConcurrency`
+limits the heavier `Browser.createWindowForProfile`/target-resolution phase.
+A queued profile starts its `openTimeoutMs` only after it receives an opening
+slot. Raising task concurrency therefore does not force all windows to open at
+once. Values must be positive; `concurrency` and `openingConcurrency` must be
+integers.
+
+The runner preserves input ordering and returns one structured result per
+profile. A failed task does not stop other tasks unless `stopOnError: true` is
+set. When stopping early, unstarted profiles receive explicit failed results.
 
 The runner closes only the `Page` it opened for each task. It does not close
 the global browser or log out after an individual task.

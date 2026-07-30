@@ -24,6 +24,16 @@ function validateRunOptions(options) {
   if (!Number.isInteger(concurrency) || concurrency <= 0) {
     throw new ProfileTaskError('concurrency must be a positive integer.');
   }
+  const openingConcurrency = options.openingConcurrency ?? 2;
+  if (!Number.isInteger(openingConcurrency) || openingConcurrency <= 0) {
+    throw new ProfileTaskError(
+      'openingConcurrency must be a positive integer.',
+    );
+  }
+  const openTimeoutMs = options.openTimeoutMs ?? 30_000;
+  if (!Number.isFinite(openTimeoutMs) || openTimeoutMs <= 0) {
+    throw new ProfileTaskError('openTimeoutMs must be a positive number.');
+  }
   if (
     options.stopOnError !== undefined &&
     typeof options.stopOnError !== 'boolean'
@@ -34,8 +44,44 @@ function validateRunOptions(options) {
     profiles: options.profiles,
     task: options.task,
     concurrency,
+    openingConcurrency,
+    openTimeoutMs,
     stopOnError: options.stopOnError === true,
   };
+}
+
+function createConcurrencyGate(limit) {
+  let active = 0;
+  const waiting = [];
+
+  async function acquire() {
+    if (active < limit) {
+      active += 1;
+      return;
+    }
+    await new Promise((resolve) => waiting.push(resolve));
+  }
+
+  function release() {
+    const next = waiting.shift();
+    if (next) {
+      // Transfer the released slot directly to the oldest waiter.
+      next();
+    } else {
+      active -= 1;
+    }
+  }
+
+  async function run(operation) {
+    await acquire();
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  }
+
+  return {run};
 }
 
 async function closeOwnedPage(page) {
@@ -49,9 +95,16 @@ async function closeOwnedPage(page) {
 }
 
 async function runForProfiles(client, options) {
-  const {profiles, task, concurrency, stopOnError} =
-    validateRunOptions(options);
+  const {
+    profiles,
+    task,
+    concurrency,
+    openingConcurrency,
+    openTimeoutMs,
+    stopOnError,
+  } = validateRunOptions(options);
   const results = new Array(profiles.length);
+  const openingGate = createConcurrencyGate(openingConcurrency);
   let nextIndex = 0;
   let stopped = false;
 
@@ -66,7 +119,9 @@ async function runForProfiles(client, options) {
       const profile = profiles[index];
       let page;
       try {
-        const opened = await client.openProfilePage(profile.id);
+        const opened = await openingGate.run(() =>
+          client.openProfilePage(profile.id, {timeoutMs: openTimeoutMs}),
+        );
         page = opened.page;
         const value = await task({profile, page, client});
         results[index] = {...baseResult(profile), success: true, value};
@@ -123,6 +178,7 @@ async function runForProfiles(client, options) {
 }
 
 module.exports = {
+  createConcurrencyGate,
   runForProfiles,
   validateRunOptions,
 };
