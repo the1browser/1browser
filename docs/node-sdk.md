@@ -127,16 +127,24 @@ options, `ONE_EMAIL` / `ONE_PASSWORD`, or ignored
 
 Known native installation paths are kept in `src/platform-paths.js`:
 
-- macOS: `/Applications/1Browser.app/Contents/MacOS/1Browser` and the same
+- macOS first queries Spotlight for bundle ID `com.browser.1browser`, then
+  checks `/Applications/1browser.app/Contents/MacOS/1browser` and the same
   bundle under `~/Applications`;
-- Windows: `1Browser\1Browser.exe` under `%LOCALAPPDATA%\Programs`,
-  `%LOCALAPPDATA%`, `%ProgramFiles%`, or `%ProgramFiles(x86)%`;
-- Linux: `/opt/1browser/1browser`, `/usr/local/bin/1browser`,
-  `/usr/bin/1browser`, `~/.local/bin/1browser`, or `/snap/bin/1browser`.
+- Windows first queries the current-user and machine `App Paths`/registered
+  application keys, then checks
+  `%LOCALAPPDATA%\1browser\Application\1browser.exe` and the equivalent
+  `%ProgramFiles%`/`%ProgramFiles(x86)%` paths;
+- Linux first searches `PATH` for `onebrowser-browser-stable`, beta/dev
+  variants, `onebrowser-browser`, or `1browser`, then checks
+  `/opt/1browser.com/1browser/1browser`, channel-suffixed `/opt` directories,
+  and the installed `/usr/bin` wrappers.
+
+Legacy SDK locations remain fallback candidates for existing installations.
 
 Discovery checks that candidates exist, deduplicates links to the same
-installation, rejects Chrome and Chromium, and requires an explicit choice
-when distinct known installations coexist.
+installation, verifies executable permission on macOS/Linux, rejects Chrome
+and Chromium, and requires an explicit choice when distinct installations
+coexist at the same discovery tier.
 
 Stable application data is created automatically under:
 
