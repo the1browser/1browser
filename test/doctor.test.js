@@ -39,7 +39,7 @@ test('doctor reports SDK, configuration, write access, and locks without auth', 
   const browser = path.join(fixtureRoot, '1browser');
   const userDataDir = path.join(fixtureRoot, 'browser-data');
   fs.mkdirSync(fixtureRoot, {recursive: true});
-  fs.writeFileSync(browser, '');
+  fs.writeFileSync(browser, '', {mode: 0o755});
   fs.mkdirSync(userDataDir);
   fs.writeFileSync(path.join(userDataDir, 'SingletonCookie'), '');
 

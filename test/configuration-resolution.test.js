@@ -82,7 +82,7 @@ test('configuration resolves explicit options before environment and local confi
   const localBrowser = path.join(fixtureRoot, 'local', '1browser');
   for (const browser of [explicitBrowser, environmentBrowser, localBrowser]) {
     fs.mkdirSync(path.dirname(browser), {recursive: true});
-    fs.writeFileSync(browser, '');
+    fs.writeFileSync(browser, '', {mode: 0o755});
   }
   const localDirectory = path.join(fixtureRoot, 'application');
   fs.mkdirSync(path.join(localDirectory, '.onebrowser'), {recursive: true});
@@ -130,7 +130,7 @@ test('environment configuration takes precedence over ignored local config', asy
   const localBrowser = path.join(fixtureRoot, 'local', '1browser');
   for (const browser of [environmentBrowser, localBrowser]) {
     fs.mkdirSync(path.dirname(browser), {recursive: true});
-    fs.writeFileSync(browser, '');
+    fs.writeFileSync(browser, '', {mode: 0o755});
   }
   const application = path.join(fixtureRoot, 'application');
   fs.mkdirSync(path.join(application, '.onebrowser'), {recursive: true});
@@ -161,7 +161,7 @@ test('ignored local config is used before native discovery and defaults', async 
   const application = path.join(fixtureRoot, 'application');
   const userDataDir = path.join(fixtureRoot, 'local-data');
   fs.mkdirSync(path.dirname(browser), {recursive: true});
-  fs.writeFileSync(browser, '');
+  fs.writeFileSync(browser, '', {mode: 0o755});
   fs.mkdirSync(path.join(application, '.onebrowser'), {recursive: true});
   fs.writeFileSync(
     path.join(application, '.onebrowser', 'config.json'),
@@ -172,6 +172,26 @@ test('ignored local config is used before native discovery and defaults', async 
     cwd: application,
     env: {},
   });
+  assert.equal(resolved.executablePath, browser);
+  assert.equal(resolved.userDataDir, userDataDir);
+});
+
+test('configuration native discovery receives PATH and cwd', async () => {
+  const application = path.join(fixtureRoot, 'path-application');
+  const binDirectory = path.join(application, 'bin');
+  const browser = path.join(binDirectory, 'onebrowser-browser-stable');
+  const userDataDir = path.join(fixtureRoot, 'path-data');
+  fs.mkdirSync(binDirectory, {recursive: true});
+  fs.writeFileSync(browser, '', {mode: 0o755});
+
+  const resolved = await resolveConfiguration({
+    applicationId: 'path-resolution',
+    cwd: application,
+    platform: 'linux',
+    options: {userDataDir},
+    env: {PATH: './bin'},
+  });
+
   assert.equal(resolved.executablePath, browser);
   assert.equal(resolved.userDataDir, userDataDir);
 });

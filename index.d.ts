@@ -34,6 +34,7 @@ export interface BrowserDiscoveryOptions {
   env?: Record<string, string | undefined>;
   platform?: string;
   homeDir?: string;
+  cwd?: string;
   knownPaths?: string[];
 }
 

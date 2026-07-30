@@ -335,9 +335,10 @@ async function resolveConfiguration({
     ...discoveryOptions,
     executablePath:
       explicitExecutable ?? environmentExecutable ?? localExecutable,
-    env: {},
+    env,
     platform,
     homeDir,
+    cwd,
     fsApi,
   });
 

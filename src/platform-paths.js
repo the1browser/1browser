@@ -70,6 +70,16 @@ function getKnownBrowserInstallPaths({
   const paths = platformPath(platform);
   if (platform === 'darwin') {
     return [
+      '/Applications/1browser.app/Contents/MacOS/1browser',
+      paths.join(
+        homeDir,
+        'Applications',
+        '1browser.app',
+        'Contents',
+        'MacOS',
+        '1browser',
+      ),
+      // Legacy capitalization used by early SDK documentation.
       '/Applications/1Browser.app/Contents/MacOS/1Browser',
       paths.join(
         homeDir,
@@ -96,6 +106,32 @@ function getKnownBrowserInstallPaths({
     return [
       paths.join(
         localAppData,
+        '1browser',
+        'Application',
+        '1browser.exe',
+      ),
+      paths.join(
+        programFiles,
+        '1browser',
+        'Application',
+        '1browser.exe',
+      ),
+      paths.join(
+        programFilesX86,
+        '1browser',
+        'Application',
+        '1browser.exe',
+      ),
+      // Legacy installer layout with company and product directories.
+      paths.join(
+        localAppData,
+        '1browser',
+        '1browser',
+        'Application',
+        '1browser.exe',
+      ),
+      paths.join(
+        localAppData,
         'Programs',
         '1Browser',
         '1Browser.exe',
@@ -107,6 +143,14 @@ function getKnownBrowserInstallPaths({
   }
   if (platform === 'linux') {
     return [
+      '/opt/1browser.com/1browser/1browser',
+      '/opt/1browser.com/1browser-beta/1browser',
+      '/opt/1browser.com/1browser-dev/1browser',
+      '/usr/bin/onebrowser-browser-stable',
+      '/usr/bin/onebrowser-browser-beta',
+      '/usr/bin/onebrowser-browser-dev',
+      '/usr/bin/onebrowser-browser',
+      // Legacy locations retained for existing installations.
       '/opt/1browser/1browser',
       '/usr/local/bin/1browser',
       '/usr/bin/1browser',
